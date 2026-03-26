@@ -1,0 +1,2 @@
+"""Codebase Copilot Python package."""
+

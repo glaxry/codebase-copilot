@@ -1,0 +1,24 @@
+autumn_project1.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+out/
+*.obj
+*.pdb
+*.lib
+*.exp
+*.ilk
+*.dll
+
+# Local vendored dependencies
+.vendor/
+
