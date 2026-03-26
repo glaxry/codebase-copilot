@@ -46,11 +46,17 @@ def _find_cmake() -> str:
 
 
 def _find_pybind11_cmake_dir() -> str:
-    if not VENDOR_DIR.exists():
-        raise FileNotFoundError("Missing .vendor directory. Install pybind11 before building.")
-
-    sys.path.insert(0, str(VENDOR_DIR))
-    import pybind11  # type: ignore
+    try:
+        import pybind11  # type: ignore
+    except ImportError:
+        if VENDOR_DIR.exists():
+            sys.path.insert(0, str(VENDOR_DIR))
+            import pybind11  # type: ignore
+        else:
+            raise ModuleNotFoundError(
+                "pybind11 is not installed in the active Python environment. "
+                "Activate your environment and run `python -m pip install -r requirements.txt`."
+            )
 
     return pybind11.get_cmake_dir()
 
