@@ -22,3 +22,7 @@ out/
 # Local vendored dependencies
 .vendor/
 
+
+# Editor
+.vscode/
+.vs/
