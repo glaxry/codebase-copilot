@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import BINARY_FILE_SUFFIXES, IGNORED_DIRECTORIES, SUPPORTED_EXTENSIONS
+from .config import (
+    BINARY_FILE_SUFFIXES,
+    IGNORED_DIRECTORIES,
+    IGNORED_FILE_NAMES,
+    SUPPORTED_EXTENSIONS,
+)
 from .models import RepoFile
 
 
@@ -45,6 +50,8 @@ class RepositoryLoader:
     def _should_skip(self, path: Path) -> bool:
         relative_parts = path.relative_to(self.repo_root).parts
         if any(part in IGNORED_DIRECTORIES for part in relative_parts[:-1]):
+            return True
+        if path.name in IGNORED_FILE_NAMES:
             return True
 
         suffix = path.suffix.lower()

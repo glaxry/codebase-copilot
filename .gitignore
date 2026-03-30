@@ -26,3 +26,7 @@ out/
 # Editor
 .vscode/
 .vs/
+
+# Generated data
+data/*.json
+!data/.gitkeep

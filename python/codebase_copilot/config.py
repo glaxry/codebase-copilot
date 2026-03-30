@@ -31,6 +31,10 @@ IGNORED_DIRECTORIES = {
     "venv",
 }
 
+IGNORED_FILE_NAMES = {
+    "autumn_project1.md",
+}
+
 BINARY_FILE_SUFFIXES = {
     ".bin",
     ".class",

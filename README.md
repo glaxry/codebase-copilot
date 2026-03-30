@@ -2,44 +2,44 @@
 
 Codebase Copilot is a local code-repository Q&A agent built with Python and C++.
 
-## Day 1 Scope
+## Current Milestones
 
-Day 1 only targets the smallest C++/Python retrieval loop:
+### Day 1
 
-- scaffold the repository
-- build a pybind11 native module with CMake
-- implement a minimal `VectorIndex`
-- call the native module from Python
-- verify the result with `python test_binding.py`
+- pybind11 C++ retrieval core
+- Python wrapper around the native vector index
+- smoke test for native binding
 
-## Current Layout
+### Day 2
 
-```text
-cpp/
-python/
-scripts/
-tests/
-docs/
-```
+- repository loader with filtering rules
+- line-based chunker with overlap and metadata
+- runnable pipeline commands for scan and chunk preview
+- acceptance test that produces hundreds of chunks from a generated repository
 
-## Day 1 Build
-
-1. Activate the `codebase` environment.
-2. Install dependencies into the active environment:
-   `python -m pip install -r requirements.txt`
-3. Build the native extension:
-   `python scripts/build_extension.py`
-4. Run the smoke test:
-   `python test_binding.py`
-
-## Recommended Workflow
+## Environment Setup
 
 ```powershell
 conda activate codebase
 cd "D:\Autumn Campus Recruitmen\Codebase Copilot"
 python -m pip install -r requirements.txt
+```
+
+## Day 1 Commands
+
+```powershell
 python scripts/build_extension.py
 python test_binding.py
+```
+
+## Day 2 Commands
+
+```powershell
+python test_repo_loader.py
+python test_chunker.py
+python python/main.py scan --repo . --preview 10
+python python/main.py chunk --repo . --preview 5 --output data/day2_chunks.json
+python test_day2_pipeline.py
 ```
 
 ## Version Notes
@@ -48,9 +48,12 @@ python test_binding.py
 - `docs/day1_v2_cpp_binding.md`
 - `docs/day1_v3_validation.md`
 - `docs/day1_v4_environment_update.md`
+- `docs/day2_v1_repo_loader.md`
+- `docs/day2_v2_chunker.md`
+- `docs/day2_v3_pipeline_validation.md`
 
 ## Repository Rules
 
 - `autumn_project1.md` is intentionally excluded from version control.
-- `.vendor` is no longer required; the project now uses the active Python environment directly.
+- `.vendor` is not required in the normal workflow.
 - Each delivery version is accompanied by a matching note in `docs/`.
