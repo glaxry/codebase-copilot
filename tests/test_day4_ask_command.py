@@ -45,6 +45,13 @@ def _create_demo_repo(repo_root: Path) -> None:
         '        "token_ttl": os.getenv("TOKEN_TTL", "3600"),\n'
         "    }\n",
     )
+    _write_text(
+        repo_root / "docs" / "entrypoint_notes.md",
+        "# Entry Point Notes\n\n"
+        "People often ask where the application entry point is.\n"
+        "This note discusses the application entry point at a high level and references src/app.py.\n"
+        "Use the source file itself as the ground truth instead of this document.\n",
+    )
 
 
 def run_day4_ask_command_test() -> list[str]:
@@ -108,6 +115,7 @@ def run_day4_ask_command_test() -> list[str]:
             assert "answer=" in completed.stdout
             assert f"source path={expected_path}" in completed.stdout
             assert "sources=" in completed.stdout
+            assert "source path=docs/entrypoint_notes.md" not in completed.stdout.splitlines()[3:6]
             validated_paths.append(expected_path)
 
         return validated_paths

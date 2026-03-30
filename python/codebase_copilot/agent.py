@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .embedder import HashingEmbedder
 from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
@@ -28,6 +28,52 @@ STOP_WORDS = {
     "where",
     "which",
 }
+SOURCE_DIRECTORIES = {"src", "python", "cpp", "include"}
+TEST_DIRECTORIES = {"test", "tests"}
+DOC_DIRECTORIES = {"doc", "docs"}
+CODE_LINE_PREFIXES = (
+    "def ",
+    "class ",
+    "from ",
+    "import ",
+    "return ",
+    "if ",
+    "for ",
+    "while ",
+    "#include",
+    "struct ",
+    "void ",
+    "int ",
+)
+
+
+def _extract_query_terms(text: str) -> list[str]:
+    terms: list[str] = []
+    for term in QUERY_TERM_PATTERN.findall(text.lower()):
+        if term in STOP_WORDS:
+            continue
+        if len(term) == 1 and term.isascii():
+            continue
+        terms.append(term)
+    return terms
+
+
+def _path_terms(relative_path: str) -> set[str]:
+    return set(QUERY_TERM_PATTERN.findall(relative_path.lower()))
+
+
+def _is_test_path(path: PurePosixPath) -> bool:
+    return any(part.lower() in TEST_DIRECTORIES for part in path.parts) or path.name.startswith("test_")
+
+
+def _is_doc_path(path: PurePosixPath) -> bool:
+    return any(part.lower() in DOC_DIRECTORIES for part in path.parts) or path.suffix.lower() == ".md"
+
+
+def _is_source_path(path: PurePosixPath) -> bool:
+    if _is_doc_path(path) or _is_test_path(path):
+        return False
+    return any(part.lower() in SOURCE_DIRECTORIES for part in path.parts) or path.suffix.lower() != ".md"
 
 
 def load_index_metadata(metadata_path: str | Path) -> LoadedIndex:
@@ -79,14 +125,7 @@ class LocalAnswerSynthesizer:
 
     @staticmethod
     def _query_terms(query: str) -> list[str]:
-        terms: list[str] = []
-        for term in QUERY_TERM_PATTERN.findall(query.lower()):
-            if term in STOP_WORDS:
-                continue
-            if len(term) == 1 and term.isascii():
-                continue
-            terms.append(term)
-        return terms
+        return _extract_query_terms(query)
 
     def _collect_evidence_lines(self, query: str, sources: list[RetrievedChunk]) -> list[str]:
         selected = self._select_lines_from_chunk(query, sources[0], limit=3, include_fallback=True)
@@ -221,12 +260,97 @@ class CodebaseQAAgent:
         if not query.strip():
             return []
 
-        results = self.retriever.search(self.embedder.embed_text(query), top_k=top_k)
-        return [
+        candidate_count = min(self.retriever.size, max(top_k * 16, 128))
+        query_terms = _extract_query_terms(query)
+        results = self.retriever.search(self.embedder.embed_text(query), top_k=candidate_count)
+        candidates = [
             RetrievedChunk(chunk=self._chunk_by_id[item_id], score=score)
             for item_id, score in results
             if item_id in self._chunk_by_id
         ]
+        ranked_candidates = sorted(
+            candidates,
+            key=lambda candidate: self._rerank_score(query_terms, candidate),
+            reverse=True,
+        )
+
+        wants_docs = any(term in {"doc", "docs", "readme", "markdown", "note", "notes"} for term in query_terms)
+        wants_tests = any(term in {"test", "tests", "testing"} or term.startswith("test_") for term in query_terms)
+        selected: list[RetrievedChunk] = []
+        deferred: list[RetrievedChunk] = []
+
+        for candidate in ranked_candidates:
+            candidate_path = PurePosixPath(candidate.chunk.relative_path)
+            if not wants_docs and _is_doc_path(candidate_path):
+                deferred.append(candidate)
+                continue
+            if not wants_tests and _is_test_path(candidate_path):
+                deferred.append(candidate)
+                continue
+            selected.append(candidate)
+            if len(selected) == top_k:
+                return selected
+
+        for candidate in deferred:
+            selected.append(candidate)
+            if len(selected) == top_k:
+                break
+
+        return selected
+
+    def _rerank_score(self, query_terms: list[str], candidate: RetrievedChunk) -> float:
+        chunk = candidate.chunk
+        path = PurePosixPath(chunk.relative_path)
+        score = candidate.score
+
+        wants_docs = any(term in {"doc", "docs", "readme", "markdown", "note", "notes"} for term in query_terms)
+        wants_tests = any(term in {"test", "tests", "testing"} or term.startswith("test_") for term in query_terms)
+        wants_entrypoint = "entrypoint" in query_terms or ("entry" in query_terms and "point" in query_terms)
+        wants_cli = any(term in {"cli", "command", "commands", "subcommand", "subcommands"} for term in query_terms)
+
+        if _is_doc_path(path):
+            score += 0.18 if wants_docs else -0.30
+        elif _is_test_path(path):
+            score += 0.15 if wants_tests else -0.08
+        elif _is_source_path(path):
+            score += 0.18
+
+        path_overlap = len(_path_terms(chunk.relative_path).intersection(query_terms))
+        score += min(path_overlap, 4) * 0.05
+
+        chunk_text_lower = chunk.text.lower()
+        if wants_entrypoint:
+            if path.stem == "main":
+                score += 0.35
+            if "def main(" in chunk_text_lower:
+                score += 0.40
+            if '__main__' in chunk_text_lower:
+                score += 0.55
+            if "systemexit(main())" in chunk_text_lower.replace(" ", ""):
+                score += 0.30
+
+        if wants_cli:
+            if "argparse" in chunk_text_lower:
+                score += 0.20
+            if "add_parser(" in chunk_text_lower:
+                score += 0.25
+            if path.stem == "main":
+                score += 0.15
+
+        code_line_hits = 0
+        for line in chunk.text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(CODE_LINE_PREFIXES):
+                code_line_hits += 1
+            elif any(token in stripped for token in ("{", "}", "(", ")", "=", ";")):
+                code_line_hits += 1
+
+        if not wants_docs:
+            score += min(code_line_hits, 6) * 0.02
+
+        return score
 
     def ask(self, query: str, top_k: int = 4, answer_mode: str = "auto") -> AnswerResult:
         if answer_mode not in {"auto", "local", "llm"}:

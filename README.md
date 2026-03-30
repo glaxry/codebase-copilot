@@ -30,7 +30,8 @@ Codebase Copilot is a local code-repository Q&A agent built with Python and C++.
 - grounded QA prompt assembly for retrieved code chunks
 - deterministic local answer synthesizer with primary-source-first evidence selection
 - optional OpenAI-compatible LLM backend with local fallback
-- runnable `ask` command and Day 4 acceptance tests for both local and mocked LLM paths
+- query-aware retrieval reranking that prefers source code and downweights `docs/*.md` for normal code questions
+- runnable `ask` command and Day 4 acceptance tests for local, mocked LLM, and source-priority retrieval paths
 
 ## Environment Setup
 
@@ -100,6 +101,7 @@ If your provider is not Alibaba Cloud DashScope, also set `CODEBASE_COPILOT_LLM_
 - `docs/day4_v2_local_answer_agent.md`
 - `docs/day4_v3_ask_command.md`
 - `docs/day4_v4_llm_backend.md`
+- `docs/day4_v5_source_priority_rerank.md`
 
 ## Repository Rules
 
