@@ -9,6 +9,7 @@ namespace codebase_copilot {
 class VectorIndex {
 public:
     void add_item(int id, const std::vector<float>& vector);
+    void add_items(const std::vector<int>& ids, const std::vector<std::vector<float>>& vectors);
 
     std::vector<std::pair<int, float>> search(
         const std::vector<float>& query,
@@ -31,4 +32,3 @@ private:
 };
 
 }  // namespace codebase_copilot
-

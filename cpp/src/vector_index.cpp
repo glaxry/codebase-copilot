@@ -34,6 +34,16 @@ void VectorIndex::add_item(int id, const std::vector<float>& vector) {
     entries_.push_back(Entry{id, vector, norm});
 }
 
+void VectorIndex::add_items(const std::vector<int>& ids, const std::vector<std::vector<float>>& vectors) {
+    if (ids.size() != vectors.size()) {
+        throw std::invalid_argument("ids and vectors must have the same length");
+    }
+
+    for (std::size_t index = 0; index < ids.size(); ++index) {
+        add_item(ids[index], vectors[index]);
+    }
+}
+
 std::vector<std::pair<int, float>> VectorIndex::search(
     const std::vector<float>& query,
     std::size_t top_k) const {

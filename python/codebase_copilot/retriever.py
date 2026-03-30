@@ -28,8 +28,32 @@ class VectorRetriever:
             raise ValueError("vector must be one-dimensional")
         return np.ascontiguousarray(array)
 
+    @staticmethod
+    def _coerce_matrix(vectors: Iterable[Iterable[float]] | np.ndarray) -> np.ndarray:
+        matrix = np.asarray(vectors, dtype=np.float32)
+        if matrix.ndim != 2:
+            raise ValueError("vectors must be two-dimensional")
+        return np.ascontiguousarray(matrix)
+
     def add_item(self, item_id: int, vector: Iterable[float] | np.ndarray) -> None:
         self._native.add_item(int(item_id), self._coerce_vector(vector))
+
+    def add_items(
+        self,
+        item_ids: Iterable[int],
+        vectors: Iterable[Iterable[float]] | np.ndarray,
+    ) -> None:
+        ids = [int(item_id) for item_id in item_ids]
+        matrix = self._coerce_matrix(vectors)
+        if matrix.shape[0] != len(ids):
+            raise ValueError("item_ids and vectors must have the same number of rows")
+
+        if hasattr(self._native, "add_items"):
+            self._native.add_items(matrix, ids)
+            return
+
+        for item_id, vector in zip(ids, matrix, strict=True):
+            self._native.add_item(item_id, np.ascontiguousarray(vector, dtype=np.float32))
 
     def search(
         self,

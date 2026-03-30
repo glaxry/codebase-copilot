@@ -15,28 +15,35 @@ if str(PYTHON_DIR) not in sys.path:
 from codebase_copilot.retriever import VectorRetriever
 
 
-def run_smoke_test() -> list[tuple[int, float]]:
+def run_smoke_test() -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
     retriever = VectorRetriever()
 
-    dataset = [
-        np.array([1.0, 0.0, 0.0], dtype=np.float32),
-        np.array([0.95, 0.05, 0.0], dtype=np.float32),
-        np.array([0.0, 1.0, 0.0], dtype=np.float32),
-        np.array([0.0, 0.0, 1.0], dtype=np.float32),
-    ]
+    dataset = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.95, 0.05, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
 
     for item_id, vector in enumerate(dataset):
         retriever.add_item(item_id, vector)
 
-    query = np.array([1.0, 0.0, 0.0], dtype=np.float32)
-    results = retriever.search(query, top_k=2)
+    single_results = retriever.search(np.array([1.0, 0.0, 0.0], dtype=np.float32), top_k=2)
+
+    batch_retriever = VectorRetriever()
+    batch_retriever.add_items([10, 11, 12, 13], dataset)
+    batch_results = batch_retriever.search(np.array([1.0, 0.0, 0.0], dtype=np.float32), top_k=2)
 
     assert retriever.size == 4
     assert retriever.dimension == 3
-    assert [item_id for item_id, _ in results] == [0, 1]
-    assert results[0][1] > results[1][1] > 0.0
+    assert [item_id for item_id, _ in single_results] == [0, 1]
+    assert single_results[0][1] > single_results[1][1] > 0.0
+    assert [item_id for item_id, _ in batch_results] == [10, 11]
 
-    return results
+    return single_results, batch_results
 
 
 def test_binding_smoke() -> None:
@@ -44,9 +51,13 @@ def test_binding_smoke() -> None:
 
 
 def main() -> int:
-    results = run_smoke_test()
+    single_results, batch_results = run_smoke_test()
     print("Smoke test passed.")
-    for item_id, score in results:
+    print("single_add_results=")
+    for item_id, score in single_results:
+        print(f"id={item_id}, score={score:.6f}")
+    print("batch_add_results=")
+    for item_id, score in batch_results:
         print(f"id={item_id}, score={score:.6f}")
     return 0
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -35,3 +36,23 @@ class CodeChunk:
             f"Language: {self.language}\n\n"
             f"{self.text}"
         )
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "chunk_id": self.chunk_id,
+            "path": self.relative_path,
+            "language": self.language,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "text": self.text,
+        }
+
+
+@dataclass(frozen=True)
+class IndexBuildResult:
+    repo_root: str
+    metadata_path: Path
+    file_count: int
+    chunk_count: int
+    embedding_dimension: int
+    retriever_size: int
