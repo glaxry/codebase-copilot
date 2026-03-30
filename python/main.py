@@ -11,6 +11,7 @@ PACKAGE_DIR = ROOT
 if str(PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(PACKAGE_DIR))
 
+from codebase_copilot.agent import CodebaseQAAgent
 from codebase_copilot.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
 from codebase_copilot.pipeline import build_chunks, build_index, load_repository, write_chunks_json
 
@@ -36,6 +37,22 @@ def _build_parser() -> argparse.ArgumentParser:
     index_parser.add_argument("--overlap", type=int, default=DEFAULT_CHUNK_OVERLAP)
     index_parser.add_argument("--embedding-dim", type=int, default=256)
     index_parser.add_argument("--output", default="data/metadata.json", help="Path to write metadata JSON")
+
+    ask_parser = subparsers.add_parser("ask", help="Ask a question against a Day 4 metadata index")
+    ask_parser.add_argument("question", help="Question to ask about the indexed repository")
+    ask_parser.add_argument("--index", default="data/metadata.json", help="Path to metadata JSON")
+    ask_parser.add_argument("--top-k", type=int, default=4, help="Number of chunks to retrieve")
+    ask_parser.add_argument(
+        "--preview-lines",
+        type=int,
+        default=4,
+        help="Number of source lines to print for each retrieved chunk",
+    )
+    ask_parser.add_argument(
+        "--show-prompt",
+        action="store_true",
+        help="Print the assembled QA prompt for debugging",
+    )
 
     return parser
 
@@ -84,6 +101,30 @@ def _run_index(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_ask(args: argparse.Namespace) -> int:
+    agent = CodebaseQAAgent.from_metadata(args.index)
+    result = agent.ask(args.question, top_k=args.top_k)
+
+    print("answer=")
+    print(result.answer)
+    print(f"sources={len(result.sources)}")
+
+    for source in result.sources:
+        chunk = source.chunk
+        print(
+            f"source path={chunk.relative_path} "
+            f"lines={chunk.start_line}-{chunk.end_line} score={source.score:.6f}"
+        )
+        for line in chunk.text.splitlines()[: max(args.preview_lines, 0)]:
+            print(f"  {line}")
+
+    if args.show_prompt:
+        print("prompt=")
+        print(result.prompt)
+
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -94,6 +135,8 @@ def main() -> int:
         return _run_chunk(args)
     if args.command == "index":
         return _run_index(args)
+    if args.command == "ask":
+        return _run_ask(args)
 
     parser.error(f"Unknown command: {args.command}")
     return 1

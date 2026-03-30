@@ -24,6 +24,13 @@ Codebase Copilot is a local code-repository Q&A agent built with Python and C++.
 - `metadata.json` output for indexed chunks
 - runnable `index` command and command-level acceptance test
 
+### Day 4
+
+- metadata loader that rebuilds the in-memory retriever from Day 3 output
+- grounded QA prompt assembly for retrieved code chunks
+- deterministic local answer synthesizer with primary-source-first evidence selection
+- runnable `ask` command and Day 4 acceptance tests for 3-4 repository questions
+
 ## Environment Setup
 
 ```powershell
@@ -58,6 +65,14 @@ python python/main.py index --repo . --output data/metadata.json
 python test_day3_index_command.py
 ```
 
+## Day 4 Commands
+
+```powershell
+python test_day4_qa_pipeline.py
+python python/main.py ask "Where is the application entry point?" --index data/metadata.json --top-k 3
+python test_day4_ask_command.py
+```
+
 ## Version Notes
 
 - `docs/day1_v1_project_scaffold.md`
@@ -70,6 +85,9 @@ python test_day3_index_command.py
 - `docs/day3_v1_embedder.md`
 - `docs/day3_v2_index_builder.md`
 - `docs/day3_v3_index_command.md`
+- `docs/day4_v1_qa_prompt_search.md`
+- `docs/day4_v2_local_answer_agent.md`
+- `docs/day4_v3_ask_command.md`
 
 ## Repository Rules
 

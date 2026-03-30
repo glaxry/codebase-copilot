@@ -47,6 +47,17 @@ class CodeChunk:
             "text": self.text,
         }
 
+    @classmethod
+    def from_record(cls, record: dict[str, object]) -> "CodeChunk":
+        return cls(
+            chunk_id=int(record["chunk_id"]),
+            relative_path=str(record["path"]),
+            language=str(record["language"]),
+            start_line=int(record["start_line"]),
+            end_line=int(record["end_line"]),
+            text=str(record["text"]),
+        )
+
 
 @dataclass(frozen=True)
 class IndexBuildResult:
@@ -56,3 +67,30 @@ class IndexBuildResult:
     chunk_count: int
     embedding_dimension: int
     retriever_size: int
+
+
+@dataclass(frozen=True)
+class LoadedIndex:
+    repo_root: str
+    metadata_path: Path
+    embedding_provider: str
+    embedding_dimension: int
+    chunk_size: int
+    chunk_overlap: int
+    file_count: int
+    chunk_count: int
+    chunks: list[CodeChunk]
+
+
+@dataclass(frozen=True)
+class RetrievedChunk:
+    chunk: CodeChunk
+    score: float
+
+
+@dataclass(frozen=True)
+class AnswerResult:
+    query: str
+    answer: str
+    prompt: str
+    sources: list[RetrievedChunk]
