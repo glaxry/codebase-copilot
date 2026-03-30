@@ -3,6 +3,12 @@ from __future__ import annotations
 DEFAULT_CHUNK_SIZE = 120
 DEFAULT_CHUNK_OVERLAP = 30
 
+DEFAULT_LLM_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"
+DEFAULT_LLM_TIMEOUT_SECONDS = 60.0
+DEFAULT_LLM_TEMPERATURE = 0.1
+DEFAULT_LLM_MAX_OUTPUT_TOKENS = 1024
+
 SUPPORTED_EXTENSIONS = {
     ".py": "python",
     ".cpp": "cpp",

@@ -104,6 +104,7 @@ def run_day4_ask_command_test() -> list[str]:
                 text=True,
             )
 
+            assert "backend=local" in completed.stdout
             assert "answer=" in completed.stdout
             assert f"source path={expected_path}" in completed.stdout
             assert "sources=" in completed.stdout

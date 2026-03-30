@@ -94,3 +94,5 @@ class AnswerResult:
     answer: str
     prompt: str
     sources: list[RetrievedChunk]
+    backend: str
+    notice: str | None = None

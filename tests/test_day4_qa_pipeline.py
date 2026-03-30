@@ -73,6 +73,7 @@ def run_day4_qa_pipeline_test() -> list[str]:
             assert expected_path in result.answer
             assert answer_hint in result.answer
             assert query in result.prompt
+            assert result.backend == "local"
             validated_paths.append(expected_path)
 
         return validated_paths

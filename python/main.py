@@ -13,6 +13,7 @@ if str(PACKAGE_DIR) not in sys.path:
 
 from codebase_copilot.agent import CodebaseQAAgent
 from codebase_copilot.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
+from codebase_copilot.llm import LLMRequestError, LLMSettings
 from codebase_copilot.pipeline import build_chunks, build_index, load_repository, write_chunks_json
 
 
@@ -43,6 +44,15 @@ def _build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("--index", default="data/metadata.json", help="Path to metadata JSON")
     ask_parser.add_argument("--top-k", type=int, default=4, help="Number of chunks to retrieve")
     ask_parser.add_argument(
+        "--answer-mode",
+        choices=("auto", "local", "llm"),
+        default="auto",
+        help="Choose local fallback, force llm, or automatically use llm when configured",
+    )
+    ask_parser.add_argument("--llm-model", help="Override the model name for OpenAI-compatible backends")
+    ask_parser.add_argument("--llm-base-url", help="Override the OpenAI-compatible API base URL")
+    ask_parser.add_argument("--llm-timeout", type=float, help="Override the LLM request timeout in seconds")
+    ask_parser.add_argument(
         "--preview-lines",
         type=int,
         default=4,
@@ -66,19 +76,12 @@ def _run_scan(args: argparse.Namespace) -> int:
 
 
 def _run_chunk(args: argparse.Namespace) -> int:
-    repo_files, chunks = build_chunks(
-        args.repo,
-        chunk_size=args.chunk_size,
-        chunk_overlap=args.overlap,
-    )
+    repo_files, chunks = build_chunks(args.repo, chunk_size=args.chunk_size, chunk_overlap=args.overlap)
     print(f"files={len(repo_files)}")
     print(f"chunks={len(chunks)}")
 
     for chunk in chunks[: args.preview]:
-        print(
-            f"chunk_id={chunk.chunk_id} path={chunk.relative_path} "
-            f"lines={chunk.start_line}-{chunk.end_line}"
-        )
+        print(f"chunk_id={chunk.chunk_id} path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line}")
 
     if args.output:
         output_path = write_chunks_json(chunks, args.output)
@@ -102,19 +105,29 @@ def _run_index(args: argparse.Namespace) -> int:
 
 
 def _run_ask(args: argparse.Namespace) -> int:
-    agent = CodebaseQAAgent.from_metadata(args.index)
-    result = agent.ask(args.question, top_k=args.top_k)
+    llm_settings = LLMSettings.from_env(
+        base_url=args.llm_base_url,
+        model=args.llm_model,
+        timeout_seconds=args.llm_timeout,
+    )
+    agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
 
+    try:
+        result = agent.ask(args.question, top_k=args.top_k, answer_mode=args.answer_mode)
+    except (LLMRequestError, ValueError) as exc:
+        print(f"error={exc}", file=sys.stderr)
+        return 2
+
+    print(f"backend={result.backend}")
+    if result.notice:
+        print(f"notice={result.notice}")
     print("answer=")
     print(result.answer)
     print(f"sources={len(result.sources)}")
 
     for source in result.sources:
         chunk = source.chunk
-        print(
-            f"source path={chunk.relative_path} "
-            f"lines={chunk.start_line}-{chunk.end_line} score={source.score:.6f}"
-        )
+        print(f"source path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line} score={source.score:.6f}")
         for line in chunk.text.splitlines()[: max(args.preview_lines, 0)]:
             print(f"  {line}")
 

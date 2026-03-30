@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from .embedder import HashingEmbedder
+from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
 from .models import AnswerResult, CodeChunk, LoadedIndex, RetrievedChunk
 from .prompt import build_qa_prompt
 from .retriever import VectorRetriever
@@ -51,7 +52,7 @@ def load_index_metadata(metadata_path: str | Path) -> LoadedIndex:
 
 
 class LocalAnswerSynthesizer:
-    """Deterministic fallback answerer used until a real LLM backend is wired in."""
+    """Deterministic fallback answerer used when no LLM backend is configured."""
 
     def generate(self, query: str, sources: list[RetrievedChunk]) -> str:
         if not sources:
@@ -184,6 +185,7 @@ class CodebaseQAAgent:
         self,
         loaded_index: LoadedIndex,
         answer_synthesizer: LocalAnswerSynthesizer | None = None,
+        llm_settings: LLMSettings | None = None,
     ) -> None:
         if loaded_index.embedding_provider != "hashing":
             raise ValueError(
@@ -194,19 +196,26 @@ class CodebaseQAAgent:
         self.loaded_index = loaded_index
         self.embedder = HashingEmbedder(dimension=loaded_index.embedding_dimension)
         self.answer_synthesizer = answer_synthesizer or LocalAnswerSynthesizer()
+        self.llm_synthesizer = (
+            OpenAICompatibleChatSynthesizer(llm_settings) if llm_settings is not None else None
+        )
         self.retriever = VectorRetriever()
         self._chunk_by_id = {chunk.chunk_id: chunk for chunk in loaded_index.chunks}
 
         if loaded_index.chunks:
-            # Day 3 persists chunk metadata only, so Day 4 rebuilds the in-memory index on load.
+            # Day 3 persists chunk metadata only, so Day 4 rebuilds the native retriever in memory on load.
             embeddings = self.embedder.embed_texts(
                 [chunk.to_embedding_text() for chunk in loaded_index.chunks]
             )
             self.retriever.add_items([chunk.chunk_id for chunk in loaded_index.chunks], embeddings)
 
     @classmethod
-    def from_metadata(cls, metadata_path: str | Path) -> "CodebaseQAAgent":
-        return cls(load_index_metadata(metadata_path))
+    def from_metadata(
+        cls,
+        metadata_path: str | Path,
+        llm_settings: LLMSettings | None = None,
+    ) -> "CodebaseQAAgent":
+        return cls(load_index_metadata(metadata_path), llm_settings=llm_settings)
 
     def retrieve(self, query: str, top_k: int = 4) -> list[RetrievedChunk]:
         if not query.strip():
@@ -219,13 +228,57 @@ class CodebaseQAAgent:
             if item_id in self._chunk_by_id
         ]
 
-    def ask(self, query: str, top_k: int = 4) -> AnswerResult:
+    def ask(self, query: str, top_k: int = 4, answer_mode: str = "auto") -> AnswerResult:
+        if answer_mode not in {"auto", "local", "llm"}:
+            raise ValueError(f"Unsupported answer mode: {answer_mode}")
+
         sources = self.retrieve(query, top_k=top_k)
         prompt = build_qa_prompt(query, sources)
-        answer = self.answer_synthesizer.generate(query, sources)
-        return AnswerResult(
-            query=query,
-            answer=answer,
-            prompt=prompt,
-            sources=sources,
-        )
+
+        if answer_mode == "local":
+            answer = self.answer_synthesizer.generate(query, sources)
+            return AnswerResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                sources=sources,
+                backend="local",
+            )
+
+        if self.llm_synthesizer is None:
+            if answer_mode == "llm":
+                raise ValueError(
+                    "LLM mode requested but no API key was configured. Set CODEBASE_COPILOT_LLM_API_KEY "
+                    "or OPENAI_API_KEY."
+                )
+            answer = self.answer_synthesizer.generate(query, sources)
+            return AnswerResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                sources=sources,
+                backend="local",
+            )
+
+        try:
+            answer = self.llm_synthesizer.generate(prompt)
+            return AnswerResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                sources=sources,
+                backend="llm",
+            )
+        except LLMRequestError as exc:
+            if answer_mode == "llm":
+                raise
+
+            answer = self.answer_synthesizer.generate(query, sources)
+            return AnswerResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                sources=sources,
+                backend="local",
+                notice=f"LLM request failed and the agent fell back to the local answerer: {exc}",
+            )
