@@ -17,6 +17,13 @@ Codebase Copilot is a local code-repository Q&A agent built with Python and C++.
 - runnable pipeline commands for scan and chunk preview
 - acceptance test that produces hundreds of chunks from a generated repository
 
+### Day 3
+
+- deterministic local hashing embedder
+- index builder that connects chunk embeddings to the C++ retriever
+- `metadata.json` output for indexed chunks
+- runnable `index` command and command-level acceptance test
+
 ## Environment Setup
 
 ```powershell
@@ -42,6 +49,15 @@ python python/main.py chunk --repo . --preview 5 --output data/day2_chunks.json
 python test_day2_pipeline.py
 ```
 
+## Day 3 Commands
+
+```powershell
+python test_embedder.py
+python test_index_builder.py
+python python/main.py index --repo . --output data/metadata.json
+python test_day3_index_command.py
+```
+
 ## Version Notes
 
 - `docs/day1_v1_project_scaffold.md`
@@ -51,6 +67,9 @@ python test_day2_pipeline.py
 - `docs/day2_v1_repo_loader.md`
 - `docs/day2_v2_chunker.md`
 - `docs/day2_v3_pipeline_validation.md`
+- `docs/day3_v1_embedder.md`
+- `docs/day3_v2_index_builder.md`
+- `docs/day3_v3_index_command.md`
 
 ## Repository Rules
 

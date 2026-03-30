@@ -12,11 +12,11 @@ if str(PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(PACKAGE_DIR))
 
 from codebase_copilot.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
-from codebase_copilot.pipeline import build_chunks, load_repository, write_chunks_json
+from codebase_copilot.pipeline import build_chunks, build_index, load_repository, write_chunks_json
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Codebase Copilot Day 2 tools")
+    parser = argparse.ArgumentParser(description="Codebase Copilot tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scan_parser = subparsers.add_parser("scan", help="Scan a repository and list loadable files")
@@ -29,6 +29,13 @@ def _build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("--overlap", type=int, default=DEFAULT_CHUNK_OVERLAP)
     chunk_parser.add_argument("--preview", type=int, default=5, help="Number of chunks to preview")
     chunk_parser.add_argument("--output", help="Optional path to write chunk metadata as JSON")
+
+    index_parser = subparsers.add_parser("index", help="Build a Day 3 metadata index")
+    index_parser.add_argument("--repo", required=True, help="Repository path")
+    index_parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
+    index_parser.add_argument("--overlap", type=int, default=DEFAULT_CHUNK_OVERLAP)
+    index_parser.add_argument("--embedding-dim", type=int, default=256)
+    index_parser.add_argument("--output", default="data/metadata.json", help="Path to write metadata JSON")
 
     return parser
 
@@ -62,6 +69,21 @@ def _run_chunk(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_index(args: argparse.Namespace) -> int:
+    result = build_index(
+        repo_root=args.repo,
+        metadata_output=args.output,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.overlap,
+        embedding_dimension=args.embedding_dim,
+    )
+    print(f"files={result.file_count}")
+    print(f"chunks={result.chunk_count}")
+    print(f"retriever_size={result.retriever_size}")
+    print(f"metadata={result.metadata_path}")
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -70,6 +92,8 @@ def main() -> int:
         return _run_scan(args)
     if args.command == "chunk":
         return _run_chunk(args)
+    if args.command == "index":
+        return _run_index(args)
 
     parser.error(f"Unknown command: {args.command}")
     return 1
