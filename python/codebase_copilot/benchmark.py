@@ -168,7 +168,11 @@ def benchmark_cpp_search(fixture: BenchmarkFixture, top_k: int = 5) -> Benchmark
     return _benchmark_search_loop("cpp", retriever.search, fixture.queries, top_k=top_k)
 
 
-def compare_python_and_cpp(spec: BenchmarkSpec) -> BenchmarkCaseResult:
+def compare_python_and_cpp(
+    spec: BenchmarkSpec,
+    *,
+    match_query_limit: int | None = 5,
+) -> BenchmarkCaseResult:
     fixture = create_benchmark_fixture(spec)
     python_result = benchmark_python_search(fixture, top_k=spec.top_k)
     cpp_result = benchmark_cpp_search(fixture, top_k=spec.top_k)
@@ -176,7 +180,7 @@ def compare_python_and_cpp(spec: BenchmarkSpec) -> BenchmarkCaseResult:
         spec=spec,
         python_result=python_result,
         cpp_result=cpp_result,
-        top_ids_match=compare_top_ids(fixture, top_k=spec.top_k),
+        top_ids_match=compare_top_ids(fixture, top_k=spec.top_k, sample_limit=match_query_limit),
     )
 
 
@@ -187,6 +191,7 @@ def run_benchmark_suite(
     query_count: int = 100,
     top_k: int = 5,
     seed: int = 42,
+    match_query_limit: int | None = 5,
 ) -> list[BenchmarkCaseResult]:
     results: list[BenchmarkCaseResult] = []
     for offset, dataset_size in enumerate(dataset_sizes):
@@ -197,7 +202,7 @@ def run_benchmark_suite(
             top_k=top_k,
             seed=seed + offset,
         )
-        results.append(compare_python_and_cpp(spec))
+        results.append(compare_python_and_cpp(spec, match_query_limit=match_query_limit))
     return results
 
 
@@ -241,6 +246,28 @@ def format_benchmark_table(results: list[BenchmarkCaseResult]) -> str:
             f"{match_label} |"
         )
     return "\n".join(lines)
+
+
+def build_benchmark_report(
+    results: list[BenchmarkCaseResult],
+    *,
+    title: str = "Day 6 Benchmark",
+) -> str:
+    if not results:
+        return f"# {title}\n\nNo benchmark results were generated.\n"
+
+    first_spec = results[0].spec
+    sizes = ", ".join(f"{result.spec.dataset_size:,}" for result in results)
+    return (
+        f"# {title}\n\n"
+        "Synthetic random unit-vector retrieval benchmark.\n\n"
+        f"- dataset sizes: {sizes}\n"
+        f"- dimension: {first_spec.dimension}\n"
+        f"- query_count: {first_spec.query_count}\n"
+        f"- top_k: {first_spec.top_k}\n"
+        f"- seed: {first_spec.seed}\n\n"
+        f"{format_benchmark_table(results)}\n"
+    )
 
 
 def _benchmark_search_loop(
