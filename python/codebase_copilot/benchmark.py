@@ -157,13 +157,106 @@ def benchmark_python_search(fixture: BenchmarkFixture, top_k: int = 5) -> Benchm
     retriever = PythonBruteForceRetriever()
     retriever.add_items(fixture.item_ids, fixture.vectors)
 
+    return _benchmark_search_loop("python", retriever.search, fixture.queries, top_k=top_k)
+
+
+def benchmark_cpp_search(fixture: BenchmarkFixture, top_k: int = 5) -> BenchmarkRun:
+    from .retriever import VectorRetriever
+
+    retriever = VectorRetriever()
+    retriever.add_items(fixture.item_ids, fixture.vectors)
+    return _benchmark_search_loop("cpp", retriever.search, fixture.queries, top_k=top_k)
+
+
+def compare_python_and_cpp(spec: BenchmarkSpec) -> BenchmarkCaseResult:
+    fixture = create_benchmark_fixture(spec)
+    python_result = benchmark_python_search(fixture, top_k=spec.top_k)
+    cpp_result = benchmark_cpp_search(fixture, top_k=spec.top_k)
+    return BenchmarkCaseResult(
+        spec=spec,
+        python_result=python_result,
+        cpp_result=cpp_result,
+        top_ids_match=compare_top_ids(fixture, top_k=spec.top_k),
+    )
+
+
+def run_benchmark_suite(
+    dataset_sizes: Iterable[int],
+    *,
+    dimension: int = 128,
+    query_count: int = 100,
+    top_k: int = 5,
+    seed: int = 42,
+) -> list[BenchmarkCaseResult]:
+    results: list[BenchmarkCaseResult] = []
+    for offset, dataset_size in enumerate(dataset_sizes):
+        spec = BenchmarkSpec(
+            dataset_size=int(dataset_size),
+            dimension=dimension,
+            query_count=query_count,
+            top_k=top_k,
+            seed=seed + offset,
+        )
+        results.append(compare_python_and_cpp(spec))
+    return results
+
+
+def compare_top_ids(fixture: BenchmarkFixture, top_k: int = 5, sample_limit: int | None = None) -> bool:
+    from .retriever import VectorRetriever
+
+    python_retriever = PythonBruteForceRetriever()
+    python_retriever.add_items(fixture.item_ids, fixture.vectors)
+
+    cpp_retriever = VectorRetriever()
+    cpp_retriever.add_items(fixture.item_ids, fixture.vectors)
+
+    max_queries = len(fixture.queries) if sample_limit is None else min(len(fixture.queries), sample_limit)
+    for query in fixture.queries[:max_queries]:
+        python_ids = [item_id for item_id, _ in python_retriever.search(query, top_k=top_k)]
+        cpp_ids = [item_id for item_id, _ in cpp_retriever.search(query, top_k=top_k)]
+        if python_ids != cpp_ids:
+            return False
+    return True
+
+
+def format_benchmark_table(results: list[BenchmarkCaseResult]) -> str:
+    if not results:
+        return "| Dataset | Python Avg (ms) | C++ Avg (ms) | Speedup | Top-K Match |\n| ------: | --------------: | -----------: | ------: | :---------: |"
+
+    lines = [
+        "| Dataset | Python Avg (ms) | C++ Avg (ms) | Speedup | Top-K Match |",
+        "| ------: | --------------: | -----------: | ------: | :---------: |",
+    ]
+    for result in results:
+        cpp_average = result.cpp_result.average_ms if result.cpp_result is not None else float("nan")
+        speedup = result.speedup
+        match_label = "n/a" if result.top_ids_match is None else ("yes" if result.top_ids_match else "no")
+        speedup_label = "n/a" if speedup is None else f"{speedup:.2f}x"
+        lines.append(
+            "| "
+            f"{result.spec.dataset_size:,} | "
+            f"{result.python_result.average_ms:.3f} | "
+            f"{cpp_average:.3f} | "
+            f"{speedup_label} | "
+            f"{match_label} |"
+        )
+    return "\n".join(lines)
+
+
+def _benchmark_search_loop(
+    engine: str,
+    search_fn,
+    queries: np.ndarray,
+    *,
+    top_k: int,
+) -> BenchmarkRun:
     start_time = perf_counter()
-    for query in fixture.queries:
-        retriever.search(query, top_k=top_k)
+    for query in queries:
+        search_fn(query, top_k=top_k)
     total_seconds = perf_counter() - start_time
-    average_ms = (total_seconds / max(len(fixture.queries), 1)) * 1000.0
+    average_ms = (total_seconds / max(len(queries), 1)) * 1000.0
     return BenchmarkRun(
-        engine="python",
+        engine=engine,
         total_seconds=total_seconds,
         average_ms=average_ms,
     )
