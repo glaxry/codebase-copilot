@@ -1,6 +1,6 @@
 """Codebase Copilot Python package."""
 
-from .agent import CodebaseQAAgent, LocalAnswerSynthesizer, load_index_metadata
+from .agent import CodebaseQAAgent, LocalAnswerSynthesizer, LocalPatchSynthesizer, load_index_metadata
 from .chunker import CodeChunker
 from .embedder import HashingEmbedder
 from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
@@ -33,6 +33,7 @@ __all__ = [
     "LLMSettings",
     "LoadedIndex",
     "LocalAnswerSynthesizer",
+    "LocalPatchSynthesizer",
     "OpenAICompatibleChatSynthesizer",
     "PatchSuggestionResult",
     "RepoFile",
