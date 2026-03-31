@@ -96,3 +96,13 @@ class AnswerResult:
     sources: list[RetrievedChunk]
     backend: str
     notice: str | None = None
+
+
+@dataclass(frozen=True)
+class PatchSuggestionResult:
+    query: str
+    suggestion: str
+    prompt: str
+    sources: list[RetrievedChunk]
+    backend: str
+    notice: str | None = None
