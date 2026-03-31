@@ -33,6 +33,14 @@ Codebase Copilot is a local code-repository Q&A agent built with Python and C++.
 - query-aware retrieval reranking that prefers source code and downweights `docs/*.md` for normal code questions
 - runnable `ask` command and Day 4 acceptance tests for local, mocked LLM, and source-priority retrieval paths
 
+### Day 5
+
+- grounded patch prompt and reusable patch result model
+- deterministic local patch suggestion synthesizer with file, reason, and patch-sketch output
+- patch-mode support for `local`, `llm`, and `auto`
+- retrieval diversity controls that deduplicate overlapping chunks and reduce repeated paths in top-k context
+- runnable `patch` command and Day 5 acceptance tests for prompt assembly, patch generation, and CLI flow
+
 ## Environment Setup
 
 ```powershell
@@ -85,6 +93,15 @@ python test_day4_llm_backend.py
 
 If your provider is not Alibaba Cloud DashScope, also set `CODEBASE_COPILOT_LLM_BASE_URL` or pass `--llm-base-url`.
 
+## Day 5 Commands
+
+```powershell
+python test_day5_patch_prompt.py
+python test_day5_patch_agent.py
+python python/main.py patch "How should I add input validation to the login flow?" --index data/metadata.json --answer-mode local --top-k 4
+python test_day5_patch_command.py
+```
+
 ## Version Notes
 
 - `docs/day1_v1_project_scaffold.md`
@@ -102,6 +119,9 @@ If your provider is not Alibaba Cloud DashScope, also set `CODEBASE_COPILOT_LLM_
 - `docs/day4_v3_ask_command.md`
 - `docs/day4_v4_llm_backend.md`
 - `docs/day4_v5_source_priority_rerank.md`
+- `docs/day5_v1_patch_prompt.md`
+- `docs/day5_v2_patch_agent.md`
+- `docs/day5_v3_patch_command.md`
 
 ## Repository Rules
 

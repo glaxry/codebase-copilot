@@ -64,6 +64,31 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print the assembled QA prompt for debugging",
     )
 
+    patch_parser = subparsers.add_parser("patch", help="Ask for a grounded patch suggestion from a Day 5 metadata index")
+    patch_parser.add_argument("question", help="Patch-style request about the indexed repository")
+    patch_parser.add_argument("--index", default="data/metadata.json", help="Path to metadata JSON")
+    patch_parser.add_argument("--top-k", type=int, default=4, help="Number of chunks to retrieve")
+    patch_parser.add_argument(
+        "--answer-mode",
+        choices=("auto", "local", "llm"),
+        default="auto",
+        help="Choose local fallback, force llm, or automatically use llm when configured",
+    )
+    patch_parser.add_argument("--llm-model", help="Override the model name for OpenAI-compatible backends")
+    patch_parser.add_argument("--llm-base-url", help="Override the OpenAI-compatible API base URL")
+    patch_parser.add_argument("--llm-timeout", type=float, help="Override the LLM request timeout in seconds")
+    patch_parser.add_argument(
+        "--preview-lines",
+        type=int,
+        default=4,
+        help="Number of source lines to print for each retrieved chunk",
+    )
+    patch_parser.add_argument(
+        "--show-prompt",
+        action="store_true",
+        help="Print the assembled patch prompt for debugging",
+    )
+
     return parser
 
 
@@ -138,6 +163,40 @@ def _run_ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_patch(args: argparse.Namespace) -> int:
+    llm_settings = LLMSettings.from_env(
+        base_url=args.llm_base_url,
+        model=args.llm_model,
+        timeout_seconds=args.llm_timeout,
+    )
+    agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
+
+    try:
+        result = agent.patch(args.question, top_k=args.top_k, answer_mode=args.answer_mode)
+    except (LLMRequestError, ValueError) as exc:
+        print(f"error={exc}", file=sys.stderr)
+        return 2
+
+    print(f"backend={result.backend}")
+    if result.notice:
+        print(f"notice={result.notice}")
+    print("suggestion=")
+    print(result.suggestion)
+    print(f"sources={len(result.sources)}")
+
+    for source in result.sources:
+        chunk = source.chunk
+        print(f"source path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line} score={source.score:.6f}")
+        for line in chunk.text.splitlines()[: max(args.preview_lines, 0)]:
+            print(f"  {line}")
+
+    if args.show_prompt:
+        print("prompt=")
+        print(result.prompt)
+
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -150,6 +209,8 @@ def main() -> int:
         return _run_index(args)
     if args.command == "ask":
         return _run_ask(args)
+    if args.command == "patch":
+        return _run_patch(args)
 
     parser.error(f"Unknown command: {args.command}")
     return 1
