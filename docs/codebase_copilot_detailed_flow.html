@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codebase Copilot 详细流程图</title>
+  <style>
+    :root {
+      --bg: #eef4fb;
+      --page: #ffffff;
+      --ink: #1b2433;
+      --muted: #68778f;
+      --line: #d8e1ef;
+      --blue: #5f8ff6;
+      --teal: #52d1c0;
+      --pink: #f16f8d;
+      --green: #59c78d;
+      --gold: #e5b44a;
+      --shadow: 0 24px 70px rgba(28, 43, 77, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(95, 143, 246, 0.12), transparent 24%),
+        radial-gradient(circle at top right, rgba(82, 209, 192, 0.10), transparent 22%),
+        linear-gradient(180deg, #f7faff 0%, #edf3fb 100%);
+    }
+
+    .shell {
+      padding: 28px;
+    }
+
+    .page {
+      max-width: 1600px;
+      margin: 0 auto;
+      background: var(--page);
+      border: 1px solid rgba(122, 145, 182, 0.16);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 30px 34px 22px;
+      border-bottom: 1px solid rgba(122, 145, 182, 0.14);
+      background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 36px;
+      line-height: 1.06;
+      letter-spacing: -0.03em;
+    }
+
+    .sub {
+      margin-top: 12px;
+      max-width: 1080px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .chip {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(111, 137, 181, 0.18);
+      background: #f7f9fd;
+      color: #40516d;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .body {
+      padding: 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .panel {
+      border: 1px solid rgba(130, 154, 195, 0.16);
+      border-radius: 22px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+    }
+
+    .panel-head {
+      padding: 20px 22px 14px;
+      border-bottom: 1px solid rgba(130, 154, 195, 0.12);
+      background: linear-gradient(180deg, rgba(247, 250, 255, 0.85) 0%, rgba(255, 255, 255, 1) 100%);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .panel-head p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .diagram {
+      padding: 18px 16px 26px;
+      overflow-x: auto;
+      background:
+        linear-gradient(180deg, rgba(242, 247, 255, 0.58) 0%, rgba(255, 255, 255, 0) 100%);
+    }
+
+    .mermaid {
+      min-width: 1100px;
+      text-align: center;
+    }
+
+    .note {
+      padding: 0 34px 30px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    code {
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: #f3f6fb;
+      border: 1px solid rgba(127, 150, 185, 0.14);
+      font-family: Consolas, "SFMono-Regular", Monaco, monospace;
+      font-size: 0.94em;
+    }
+
+    a {
+      color: #2d5ec4;
+      text-decoration: none;
+    }
+
+    @media (max-width: 900px) {
+      .shell { padding: 14px; }
+      .hero { padding: 22px 20px 18px; }
+      .body { padding: 14px; }
+      .panel-head { padding: 18px 18px 12px; }
+      .note { padding: 0 20px 24px; }
+      .mermaid { min-width: 920px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="page">
+      <div class="hero">
+        <h1>Codebase Copilot 详细流程图</h1>
+        <div class="sub">
+          这份 HTML 直接对应仓库中的实际代码调用链，主线覆盖 <code>scan</code>、<code>chunk</code>、<code>index</code>、<code>ask</code>、<code>patch</code>、<code>benchmark</code> 六条命令路径，
+          同时把 Python 侧的仓库加载、切块、重排、提示词拼装、LLM 回退，以及 C++ 原生向量检索桥接完整展开。
+        </div>
+        <div class="chips">
+          <div class="chip">CLI</div>
+          <div class="chip">Index Pipeline</div>
+          <div class="chip">Ask / Patch</div>
+          <div class="chip">Benchmark</div>
+          <div class="chip">Python + C++</div>
+        </div>
+      </div>
+
+      <div class="body">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>总流程</h2>
+            <p>从统一 CLI 入口出发，把离线建索引、在线问答、补丁建议和 benchmark 分支放在一张总图里。适合先整体讲项目怎么跑起来。</p>
+          </div>
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart TD
+  U["User / CLI"] --> MAIN["python/main.py&lt;br/&gt;argparse subcommand router"]
+
+  subgraph INGEST["Scan / Chunk / Index"]
+    LR["RepositoryLoader.load_files()"]
+    WALK["rglob('*') over repo"]
+    SKIP["filter ignored dirs / names / suffixes / binaries"]
+    READ["read_bytes()&lt;br/&gt;decode utf-8 / utf-8-sig / gb18030"]
+    RF["RepoFile list"]
+    CHUNKER["CodeChunker.chunk_repository()"]
+    WINDOW["chunk_file()&lt;br/&gt;line windows with overlap&lt;br/&gt;step = chunk_size - overlap"]
+    CC["CodeChunk list"]
+    EMB["HashingEmbedder.embed_texts()&lt;br/&gt;chunk.to_embedding_text()"]
+    VRADD["VectorRetriever.add_items()&lt;br/&gt;native _vector_index"]
+    META["metadata.json&lt;br/&gt;repo_root / embedding / chunking / chunks"]
+    LR --> WALK --> SKIP --> READ --> RF --> CHUNKER --> WINDOW --> CC --> EMB --> VRADD --> META
+  end
+
+  MAIN -->|scan| SCAN["scan"]
+  SCAN --> LR
+  SCAN --> SP["print file count and preview"]
+
+  MAIN -->|chunk| CH["chunk"]
+  CH --> LR
+  CH --> CHUNKER
+  CH --> WJSON["write_chunks_json() optional"]
+  CH --> COUT["print chunk count and preview"]
+
+  MAIN -->|index| IDX["index"]
+  IDX --> LR
+  IDX --> CHUNKER
+  IDX --> EMB
+  IDX --> VRADD
+  IDX --> META
+  IDX --> IOUT["print IndexBuildResult"]
+
+  subgraph QA["ask / patch runtime"]
+    SETTINGS["LLMSettings.from_env()"]
+    FROMMETA["CodebaseQAAgent.from_metadata(index)"]
+    LOADM["load_index_metadata()"]
+    INIT["agent __init__()&lt;br/&gt;validate hashing provider&lt;br/&gt;init embedder / local synth / optional LLM synth / VectorRetriever"]
+    REBUILD["rehydrate retriever in memory&lt;br/&gt;embed saved chunks again"]
+    RET["retrieve(query, top_k, intent)"]
+    QEMB["embed query"]
+    SEARCH["VectorRetriever.search()&lt;br/&gt;candidate_count=min(size,max(top_k*24,128))"]
+    RERANK["_rerank_score()&lt;br/&gt;similarity + path overlap + source/doc/test preference&lt;br/&gt;entrypoint / CLI / validation / logging / exception hints"]
+    SELECT["_select_context_chunks()&lt;br/&gt;drop near-duplicates&lt;br/&gt;max 2 chunks per path&lt;br/&gt;defer docs/tests unless requested"]
+    PROMPTQA["build_qa_prompt()"]
+    PROMPTPATCH["build_patch_prompt()"]
+    MODEQA{"answer_mode?"}
+    MODEPATCH{"answer_mode?"}
+    LOCALQA["LocalAnswerSynthesizer.generate()&lt;br/&gt;collect evidence lines and assemble answer"]
+    LOCALPATCH["LocalPatchSynthesizer.generate()&lt;br/&gt;classify focus / find target line / build pseudo diff"]
+    LLMQ["OpenAICompatibleChatSynthesizer.generate()&lt;br/&gt;POST /chat/completions"]
+    LLMP["OpenAICompatibleChatSynthesizer.generate()&lt;br/&gt;POST /chat/completions"]
+    FALLQA["LLM failed and mode is not forced llm"]
+    FALLPATCH["LLM failed and mode is not forced llm"]
+    ERR["raise to CLI -&gt; print error and exit 2"]
+    AQOUT["print answer / sources / optional prompt"]
+    PQOUT["print suggestion / sources / optional prompt"]
+
+    FROMMETA --> LOADM --> INIT --> REBUILD --> RET
+    RET --> QEMB --> SEARCH --> RERANK --> SELECT
+  end
+
+  MAIN -->|ask| ASK["ask"]
+  ASK --> SETTINGS
+  ASK --> FROMMETA
+  SELECT --> PROMPTQA --> MODEQA
+  MODEQA -->|local| LOCALQA --> AQOUT
+  MODEQA -->|llm or auto with settings| LLMQ
+  LLMQ -->|success| AQOUT
+  LLMQ -->|failure| FALLQA
+  FALLQA --> LOCALQA
+  FALLQA --> ERR
+
+  MAIN -->|patch| PATCH["patch"]
+  PATCH --> SETTINGS
+  PATCH --> FROMMETA
+  SELECT --> PROMPTPATCH --> MODEPATCH
+  MODEPATCH -->|local| LOCALPATCH --> PQOUT
+  MODEPATCH -->|llm or auto with settings| LLMP
+  LLMP -->|success| PQOUT
+  LLMP -->|failure| FALLPATCH
+  FALLPATCH --> LOCALPATCH
+  FALLPATCH --> ERR
+
+  subgraph BENCH["benchmark"]
+    SIZES["_parse_benchmark_sizes()"]
+    SUITE["run_benchmark_suite()"]
+    FIXTURE["create_benchmark_fixture()&lt;br/&gt;random unit vectors + queries"]
+    PYBASE["PythonBruteForceRetriever&lt;br/&gt;Python loops cosine + min-heap top-k"]
+    CPPBASE["VectorRetriever / C++ VectorIndex&lt;br/&gt;C++ scan + priority_queue top-k"]
+    MATCH["compare_top_ids()"]
+    TABLE["format_benchmark_table()"]
+    REPORT["build_benchmark_report()"]
+    WRITE["optional write data/day6_benchmark.md"]
+    SIZES --> SUITE --> FIXTURE
+    FIXTURE --> PYBASE
+    FIXTURE --> CPPBASE
+    FIXTURE --> MATCH
+    PYBASE --> TABLE
+    CPPBASE --> TABLE
+    MATCH --> TABLE
+    TABLE --> REPORT --> WRITE
+  end
+
+  MAIN -->|benchmark| B["benchmark"]
+  B --> SIZES
+
+  subgraph NATIVE["Native extension build and binding"]
+    BUILD["scripts/build_extension.py"]
+    CMAKE["locate cmake / pybind11"]
+    CONF["cmake configure + build"]
+    MOD["_vector_index module"]
+    BIND["binding.cpp&lt;br/&gt;NumPy -&gt; std::vector"]
+    CORE["vector_index.cpp&lt;br/&gt;add_item(s) / search() / cosine / min-heap"]
+    BUILD --> CMAKE --> CONF --> MOD --> BIND --> CORE
+  end
+
+  MOD -.loaded at runtime.-&gt; VRADD
+  MOD -.loaded at runtime.-&gt; SEARCH
+  MOD -.loaded at runtime.-&gt; CPPBASE
+            </pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Ask / Patch 细化流程</h2>
+            <p>这一张专门展开 <code>metadata.json</code> 如何被重新加载，检索器如何在内存重建，以及本地合成器和 LLM 路径如何分流、回退。</p>
+          </div>
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart TD
+  CMD["ask or patch command"] --> META["load metadata JSON"]
+  META --> CHUNKS["CodeChunk.from_record() rebuild chunk list"]
+  CHUNKS --> AGENT["CodebaseQAAgent"]
+  AGENT --> EMB["HashingEmbedder"]
+  AGENT --> RETR["VectorRetriever"]
+  AGENT --> MAP["chunk_id -&gt; chunk map"]
+  CHUNKS --> REEMB["embed loaded chunks again"]
+  REEMB --> RETR
+
+  AGENT --> RET["retrieve(query, top_k, intent)"]
+  RET --> TERMS["extract query terms"]
+  RET --> QV["embed query"]
+  QV --> SEARCH["native vector search"]
+  SEARCH --> CANDS["RetrievedChunk candidates"]
+  CANDS --> RERANK["intent-aware rerank"]
+  RERANK --> DEDUP["remove near duplicates"]
+  DEDUP --> PICK["select final top-k context"]
+
+  PICK --> QA_PROMPT["build_qa_prompt()"]
+  PICK --> PATCH_PROMPT["build_patch_prompt()"]
+
+  QA_PROMPT --> QA_MODE{"local or llm"}
+  PATCH_PROMPT --> PATCH_MODE{"local or llm"}
+
+  QA_MODE -->|local| LA["LocalAnswerSynthesizer"]
+  QA_MODE -->|llm| LLM1["OpenAI-compatible chat request"]
+  LLM1 -->|ok| QA_RES["AnswerResult backend=llm"]
+  LLM1 -->|fail| QA_FB{"forced llm?"}
+  QA_FB -->|no| LA
+  QA_FB -->|yes| ERR1["raise error"]
+  LA --> QA_RES2["AnswerResult backend=local"]
+
+  PATCH_MODE -->|local| LP["LocalPatchSynthesizer"]
+  PATCH_MODE -->|llm| LLM2["OpenAI-compatible chat request"]
+  LLM2 -->|ok| PATCH_RES["PatchSuggestionResult backend=llm"]
+  LLM2 -->|fail| PATCH_FB{"forced llm?"}
+  PATCH_FB -->|no| LP
+  PATCH_FB -->|yes| ERR2["raise error"]
+  LP --> PATCH_RES2["PatchSuggestionResult backend=local"]
+            </pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Benchmark 细化流程</h2>
+            <p>这一张把 Python baseline 和 C++ 原生检索的比较链路单独拎出来，适合讲为什么这个项目需要 pybind11 + C++ 向量检索。</p>
+          </div>
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart TD
+  START["benchmark command"] --> PARSE["parse sizes"]
+  PARSE --> SUITE["run_benchmark_suite()"]
+  SUITE --> SPEC["BenchmarkSpec per dataset size"]
+  SPEC --> FIX["create_benchmark_fixture()"]
+  FIX --> DATA["dataset vectors"]
+  FIX --> QUERIES["query vectors"]
+
+  FIX --> PY["benchmark_python_search()"]
+  FIX --> CPP["benchmark_cpp_search()"]
+  FIX --> CMP["compare_top_ids()"]
+
+  PY --> PYDET["PythonBruteForceRetriever&lt;br/&gt;store vectors + norms&lt;br/&gt;loop over all vectors per query&lt;br/&gt;manual cosine similarity&lt;br/&gt;min-heap top-k"]
+  CPP --> CPPDET["VectorRetriever -&gt; _vector_index&lt;br/&gt;binding.cpp converts NumPy arrays&lt;br/&gt;C++ VectorIndex scans entries&lt;br/&gt;cosine similarity&lt;br/&gt;priority_queue top-k"]
+
+  PYDET --> TABLE["format_benchmark_table()"]
+  CPPDET --> TABLE
+  CMP --> TABLE
+  TABLE --> REPORT["build_benchmark_report()"]
+  REPORT --> OUT["optional markdown file"]
+            </pre>
+          </div>
+        </section>
+      </div>
+
+      <div class="note">
+        本页依赖浏览器端 Mermaid 渲染。如果打开后只看到代码块、没有看到图，通常是浏览器没有加载下方脚本。那种情况下我可以再给你补一份完全静态的 SVG/纯 HTML 版本。
+        源 Markdown 文件在 <a href="./codebase_copilot_detailed_flow.md">codebase_copilot_detailed_flow.md</a>。
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: 'loose',
+      theme: 'base',
+      themeVariables: {
+        background: '#ffffff',
+        primaryColor: '#eef5ff',
+        primaryTextColor: '#1b2433',
+        primaryBorderColor: '#5f8ff6',
+        lineColor: '#8ea3c5',
+        secondaryColor: '#f4fbf7',
+        tertiaryColor: '#fff8ec',
+        fontFamily: 'Segoe UI, PingFang SC, Microsoft YaHei, sans-serif',
+        clusterBkg: '#fbfdff',
+        clusterBorder: '#d7e2f2'
+      },
+      flowchart: {
+        htmlLabels: true,
+        curve: 'basis',
+        padding: 18,
+        nodeSpacing: 30,
+        rankSpacing: 42,
+        useMaxWidth: false
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codebase Copilot 流程图</title>
+  <style>
+    :root {
+      --bg: #eef4fb;
+      --page: #ffffff;
+      --ink: #1b2433;
+      --muted: #6c7a91;
+      --line: #8ea3c5;
+      --pink: #f16f8d;
+      --teal: #51d2c1;
+      --blue: #5f8ff6;
+      --green: #59c78d;
+      --gold: #e5b44a;
+      --violet: #9878ef;
+      --shadow: 0 22px 60px rgba(30, 44, 79, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(95, 143, 246, 0.12), transparent 24%),
+        radial-gradient(circle at top right, rgba(81, 210, 193, 0.10), transparent 26%),
+        linear-gradient(180deg, #f7faff 0%, #edf3fb 100%);
+    }
+
+    .shell { padding: 28px; }
+
+    .page {
+      max-width: 1840px;
+      margin: 0 auto;
+      background: var(--page);
+      border: 1px solid rgba(120, 146, 191, 0.18);
+      border-radius: 26px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .header {
+      padding: 28px 34px 20px;
+      border-bottom: 1px solid rgba(130, 154, 195, 0.18);
+      background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .sub {
+      margin-top: 10px;
+      max-width: 980px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .tag {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(111, 137, 181, 0.18);
+      background: #f7f9fd;
+      color: #3f5270;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .canvas-wrap {
+      overflow-x: auto;
+      padding: 18px 20px 26px;
+    }
+
+    svg {
+      width: 1800px;
+      height: 1420px;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .footer {
+      padding: 0 34px 28px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="page">
+      <div class="header">
+        <h1>Codebase Copilot 流程图</h1>
+        <div class="sub">
+          这张图强调的是“系统如何运行”，不是“模块如何分层”。
+          它从统一 CLI 入口出发，拆成离线索引、在线问答、修改建议、性能 benchmark 四条主流程，
+          对应项目当前实际代码实现。
+        </div>
+        <div class="tags">
+          <div class="tag">Index Flow</div>
+          <div class="tag">Ask Flow</div>
+          <div class="tag">Patch Flow</div>
+          <div class="tag">Benchmark Flow</div>
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <svg viewBox="0 0 1800 1420" xmlns="http://www.w3.org/2000/svg" aria-label="Codebase Copilot 流程图">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ea3c5"/>
+            </marker>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#22365b" flood-opacity="0.10"/>
+            </filter>
+          </defs>
+
+          <rect x="0" y="0" width="1800" height="1420" fill="#ffffff"/>
+
+          <g font-family="Segoe UI, Microsoft YaHei, sans-serif" fill="#5e6f89" font-size="12" font-weight="700">
+            <text x="70" y="56">统一入口</text>
+            <text x="285" y="56">离线索引流程</text>
+            <text x="285" y="382">在线问答流程</text>
+            <text x="285" y="730">修改建议流程</text>
+            <text x="285" y="1082">性能 Benchmark 流程</text>
+            <text x="1452" y="56">关键说明</text>
+          </g>
+
+          <g font-family="Segoe UI, Microsoft YaHei, sans-serif" fill="#8b99af" font-size="11">
+            <text x="66" y="76">CLI command entrypoint</text>
+            <text x="286" y="76">scan / chunk / index</text>
+            <text x="286" y="402">ask question against metadata</text>
+            <text x="286" y="750">grounded patch suggestion path</text>
+            <text x="286" y="1102">python vs c++ latency comparison</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="38" y="104" rx="26" ry="26" width="196" height="1232" fill="#fbfdff" stroke="#d9e5f4" stroke-width="2"/>
+            <text x="66" y="148" fill="#22324a" font-size="30" font-weight="800">入口层</text>
+            <text x="66" y="174" fill="#7a8ba6" font-size="12">统一命令分发和使用入口</text>
+
+            <rect x="58" y="220" rx="18" ry="18" width="156" height="88" fill="#f3fffb" stroke="#51d2c1" stroke-width="3"/>
+            <text x="88" y="256" fill="#203045" font-size="24" font-weight="800">python/main.py</text>
+            <text x="88" y="280" fill="#5a7189" font-size="13">argparse CLI</text>
+
+            <rect x="58" y="340" rx="18" ry="18" width="156" height="70" fill="#f3fffb" stroke="#51d2c1" stroke-width="3"/>
+            <text x="100" y="382" fill="#203045" font-size="22" font-weight="800">scan</text>
+
+            <rect x="58" y="430" rx="18" ry="18" width="156" height="70" fill="#f3fffb" stroke="#51d2c1" stroke-width="3"/>
+            <text x="96" y="472" fill="#203045" font-size="22" font-weight="800">chunk / index</text>
+
+            <rect x="58" y="520" rx="18" ry="18" width="156" height="70" fill="#f3fffb" stroke="#51d2c1" stroke-width="3"/>
+            <text x="104" y="562" fill="#203045" font-size="22" font-weight="800">ask</text>
+
+            <rect x="58" y="610" rx="18" ry="18" width="156" height="70" fill="#f3fffb" stroke="#51d2c1" stroke-width="3"/>
+            <text x="96" y="652" fill="#203045" font-size="22" font-weight="800">patch</text>
+
+            <rect x="58" y="700" rx="18" ry="18" width="156" height="70" fill="#f3fffb" stroke="#51d2c1" stroke-width="3"/>
+            <text x="76" y="742" fill="#203045" font-size="22" font-weight="800">benchmark</text>
+
+            <rect x="58" y="820" rx="18" ry="18" width="156" height="86" fill="#ffffff" stroke="#51d2c1" stroke-width="3"/>
+            <text x="82" y="856" fill="#203045" font-size="22" font-weight="800">本地仓库</text>
+            <text x="82" y="880" fill="#5a7189" font-size="13">source files / docs / tests</text>
+
+            <rect x="58" y="936" rx="18" ry="18" width="156" height="86" fill="#ffffff" stroke="#51d2c1" stroke-width="3"/>
+            <text x="82" y="972" fill="#203045" font-size="22" font-weight="800">用户输入</text>
+            <text x="82" y="996" fill="#5a7189" font-size="13">问题 / 修改请求 / benchmark 参数</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="262" y="104" rx="28" ry="28" width="1150" height="246" fill="#fffdf9" stroke="#efd8af" stroke-width="2" stroke-dasharray="8 8"/>
+            <rect x="288" y="124" rx="999" ry="999" width="174" height="34" fill="#fff1dc" stroke="#e5b44a" stroke-width="2"/>
+            <text x="316" y="147" fill="#846114" font-size="18" font-weight="800">INDEX FLOW</text>
+
+            <rect x="300" y="188" rx="18" ry="18" width="156" height="92" fill="#ffffff" stroke="#f16f8d" stroke-width="3"/>
+            <text x="332" y="224" fill="#22324a" font-size="22" font-weight="800">RepositoryLoader</text>
+            <text x="332" y="248" fill="#667892" font-size="13">扫描仓库并过滤文件</text>
+            <text x="332" y="267" fill="#667892" font-size="12">repo_loader.py</text>
+
+            <rect x="506" y="188" rx="18" ry="18" width="146" height="92" fill="#ffffff" stroke="#f16f8d" stroke-width="3"/>
+            <text x="540" y="224" fill="#22324a" font-size="22" font-weight="800">CodeChunker</text>
+            <text x="540" y="248" fill="#667892" font-size="13">按行切 chunk</text>
+            <text x="540" y="267" fill="#667892" font-size="12">chunker.py</text>
+
+            <rect x="702" y="188" rx="18" ry="18" width="158" height="92" fill="#ffffff" stroke="#f16f8d" stroke-width="3"/>
+            <text x="738" y="224" fill="#22324a" font-size="22" font-weight="800">HashingEmbedder</text>
+            <text x="738" y="248" fill="#667892" font-size="13">生成本地向量</text>
+            <text x="738" y="267" fill="#667892" font-size="12">embedder.py</text>
+
+            <rect x="912" y="188" rx="18" ry="18" width="150" height="92" fill="#ffffff" stroke="#f16f8d" stroke-width="3"/>
+            <text x="952" y="224" fill="#22324a" font-size="22" font-weight="800">VectorRetriever</text>
+            <text x="952" y="248" fill="#667892" font-size="13">写入向量索引</text>
+            <text x="952" y="267" fill="#667892" font-size="12">retriever.py</text>
+
+            <rect x="1114" y="188" rx="18" ry="18" width="268" height="92" fill="#ffffff" stroke="#f16f8d" stroke-width="3"/>
+            <text x="1150" y="224" fill="#22324a" font-size="22" font-weight="800">pipeline.build_index()</text>
+            <text x="1150" y="248" fill="#667892" font-size="13">写 metadata.json，保存 chunk 元信息</text>
+            <text x="1150" y="267" fill="#667892" font-size="12">pipeline.py</text>
+
+            <rect x="1114" y="294" rx="18" ry="18" width="268" height="34" fill="#fff9ef" stroke="#e5b44a" stroke-width="3"/>
+            <text x="1204" y="317" fill="#6f5518" font-size="18" font-weight="800">data/metadata.json</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="262" y="430" rx="28" ry="28" width="1150" height="276" fill="#fffafd" stroke="#edc5d1" stroke-width="2" stroke-dasharray="8 8"/>
+            <rect x="288" y="450" rx="999" ry="999" width="166" height="34" fill="#ffe8ef" stroke="#f16f8d" stroke-width="2"/>
+            <text x="318" y="473" fill="#8c2a45" font-size="18" font-weight="800">ASK FLOW</text>
+
+            <rect x="300" y="514" rx="18" ry="18" width="150" height="92" fill="#ffffff" stroke="#5f8ff6" stroke-width="3"/>
+            <text x="344" y="550" fill="#22324a" font-size="22" font-weight="800">读取 metadata</text>
+            <text x="344" y="574" fill="#667892" font-size="13">load_index_metadata()</text>
+            <text x="344" y="593" fill="#667892" font-size="12">恢复 chunk 记录</text>
+
+            <rect x="494" y="514" rx="18" ry="18" width="192" height="92" fill="#ffffff" stroke="#5f8ff6" stroke-width="3"/>
+            <text x="526" y="550" fill="#22324a" font-size="22" font-weight="800">CodebaseQAAgent</text>
+            <text x="526" y="574" fill="#667892" font-size="13">在内存里重建检索器</text>
+            <text x="526" y="593" fill="#667892" font-size="12">agent.py</text>
+
+            <rect x="730" y="514" rx="18" ry="18" width="144" height="92" fill="#ffffff" stroke="#5f8ff6" stroke-width="3"/>
+            <text x="768" y="550" fill="#22324a" font-size="22" font-weight="800">query 向量化</text>
+            <text x="768" y="574" fill="#667892" font-size="13">HashingEmbedder</text>
+            <text x="768" y="593" fill="#667892" font-size="12">embed query</text>
+
+            <rect x="914" y="514" rx="18" ry="18" width="170" height="92" fill="#ffffff" stroke="#5f8ff6" stroke-width="3"/>
+            <text x="952" y="550" fill="#22324a" font-size="22" font-weight="800">native top-k</text>
+            <text x="952" y="574" fill="#667892" font-size="13">C++ VectorRetriever</text>
+            <text x="952" y="593" fill="#667892" font-size="12">search()</text>
+
+            <rect x="1122" y="514" rx="18" ry="18" width="238" height="92" fill="#ffffff" stroke="#5f8ff6" stroke-width="3"/>
+            <text x="1154" y="550" fill="#22324a" font-size="22" font-weight="800">检索后优化</text>
+            <text x="1154" y="574" fill="#667892" font-size="13">rerank / 源码优先 / docs 降权 / 去重</text>
+            <text x="1154" y="593" fill="#667892" font-size="12">retrieve()</text>
+
+            <rect x="430" y="634" rx="18" ry="18" width="192" height="48" fill="#eef5ff" stroke="#aec2ef" stroke-width="2"/>
+            <text x="462" y="664" fill="#567095" font-size="17" font-weight="800">prompt.py -> build_qa_prompt()</text>
+
+            <rect x="668" y="634" rx="18" ry="18" width="168" height="48" fill="#f4fbf7" stroke="#59c78d" stroke-width="2"/>
+            <text x="706" y="664" fill="#407359" font-size="17" font-weight="800">LocalAnswerSynthesizer</text>
+
+            <rect x="870" y="634" rx="18" ry="18" width="168" height="48" fill="#f4fbf7" stroke="#59c78d" stroke-width="2"/>
+            <text x="912" y="664" fill="#407359" font-size="17" font-weight="800">OpenAI-compatible LLM</text>
+
+            <rect x="1072" y="634" rx="18" ry="18" width="216" height="48" fill="#f8fbff" stroke="#d7e2f3" stroke-width="2"/>
+            <text x="1122" y="664" fill="#5f7089" font-size="17" font-weight="800">输出 answer + sources</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="262" y="780" rx="28" ry="28" width="1150" height="286" fill="#fafcff" stroke="#d6cdf8" stroke-width="2" stroke-dasharray="8 8"/>
+            <rect x="288" y="800" rx="999" ry="999" width="176" height="34" fill="#f0ebff" stroke="#9878ef" stroke-width="2"/>
+            <text x="318" y="823" fill="#6e54c8" font-size="18" font-weight="800">PATCH FLOW</text>
+
+            <rect x="300" y="866" rx="18" ry="18" width="150" height="92" fill="#ffffff" stroke="#9878ef" stroke-width="3"/>
+            <text x="344" y="902" fill="#22324a" font-size="22" font-weight="800">读取 metadata</text>
+            <text x="344" y="926" fill="#667892" font-size="13">同 ask 路径</text>
+            <text x="344" y="945" fill="#667892" font-size="12">恢复 chunk 和检索器</text>
+
+            <rect x="494" y="866" rx="18" ry="18" width="198" height="92" fill="#ffffff" stroke="#9878ef" stroke-width="3"/>
+            <text x="526" y="902" fill="#22324a" font-size="22" font-weight="800">patch intent 检索</text>
+            <text x="526" y="926" fill="#667892" font-size="13">source-first rerank</text>
+            <text x="526" y="945" fill="#667892" font-size="12">选择更适合修改的上下文</text>
+
+            <rect x="738" y="866" rx="18" ry="18" width="178" height="92" fill="#ffffff" stroke="#9878ef" stroke-width="3"/>
+            <text x="770" y="902" fill="#22324a" font-size="22" font-weight="800">build_patch_prompt</text>
+            <text x="770" y="926" fill="#667892" font-size="13">文件 + 理由 + patch sketch</text>
+            <text x="770" y="945" fill="#667892" font-size="12">prompt.py</text>
+
+            <rect x="962" y="866" rx="18" ry="18" width="194" height="92" fill="#ffffff" stroke="#9878ef" stroke-width="3"/>
+            <text x="996" y="902" fill="#22324a" font-size="22" font-weight="800">LocalPatchSynthesizer</text>
+            <text x="996" y="926" fill="#667892" font-size="13">deterministic patch 建议</text>
+            <text x="996" y="945" fill="#667892" font-size="12">agent.py</text>
+
+            <rect x="1196" y="866" rx="18" ry="18" width="164" height="92" fill="#ffffff" stroke="#9878ef" stroke-width="3"/>
+            <text x="1238" y="902" fill="#22324a" font-size="22" font-weight="800">LLM Path</text>
+            <text x="1238" y="926" fill="#667892" font-size="13">可选远端模型</text>
+            <text x="1238" y="945" fill="#667892" font-size="12">失败时可回退</text>
+
+            <rect x="530" y="986" rx="18" ry="18" width="564" height="52" fill="#f7f9fd" stroke="#dbe4f2" stroke-width="2"/>
+            <text x="560" y="1018" fill="#62738e" font-size="17" font-weight="800">最终输出 suggestion + sources + prompt + backend + notice</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="262" y="1128" rx="28" ry="28" width="1150" height="234" fill="#f9fffb" stroke="#c2e2d0" stroke-width="2" stroke-dasharray="8 8"/>
+            <rect x="288" y="1148" rx="999" ry="999" width="216" height="34" fill="#e8fff0" stroke="#59c78d" stroke-width="2"/>
+            <text x="320" y="1171" fill="#1e7d49" font-size="18" font-weight="800">BENCHMARK FLOW</text>
+
+            <rect x="300" y="1210" rx="18" ry="18" width="192" height="92" fill="#ffffff" stroke="#59c78d" stroke-width="3"/>
+            <text x="334" y="1246" fill="#22324a" font-size="22" font-weight="800">生成随机单位向量</text>
+            <text x="334" y="1270" fill="#667892" font-size="13">create_benchmark_fixture()</text>
+            <text x="334" y="1289" fill="#667892" font-size="12">benchmark.py</text>
+
+            <rect x="528" y="1210" rx="18" ry="18" width="184" height="92" fill="#ffffff" stroke="#59c78d" stroke-width="3"/>
+            <text x="562" y="1246" fill="#22324a" font-size="22" font-weight="800">Python baseline</text>
+            <text x="562" y="1270" fill="#667892" font-size="13">PythonBruteForceRetriever</text>
+            <text x="562" y="1289" fill="#667892" font-size="12">逐条循环算 cosine</text>
+
+            <rect x="748" y="1210" rx="18" ry="18" width="172" height="92" fill="#ffffff" stroke="#59c78d" stroke-width="3"/>
+            <text x="794" y="1246" fill="#22324a" font-size="22" font-weight="800">C++ path</text>
+            <text x="794" y="1270" fill="#667892" font-size="13">VectorRetriever</text>
+            <text x="794" y="1289" fill="#667892" font-size="12">native search</text>
+
+            <rect x="956" y="1210" rx="18" ry="18" width="194" height="92" fill="#ffffff" stroke="#59c78d" stroke-width="3"/>
+            <text x="994" y="1246" fill="#22324a" font-size="22" font-weight="800">结果对比</text>
+            <text x="994" y="1270" fill="#667892" font-size="13">平均延迟 + top-k 一致性</text>
+            <text x="994" y="1289" fill="#667892" font-size="12">speedup</text>
+
+            <rect x="1186" y="1210" rx="18" ry="18" width="176" height="92" fill="#ffffff" stroke="#59c78d" stroke-width="3"/>
+            <text x="1220" y="1246" fill="#22324a" font-size="22" font-weight="800">Markdown 报告</text>
+            <text x="1220" y="1270" fill="#667892" font-size="13">day6_benchmark.md</text>
+            <text x="1220" y="1289" fill="#667892" font-size="12">README benchmark 表</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="1438" y="104" rx="24" ry="24" width="318" height="1258" fill="#fbfcff" stroke="#dde5f1" stroke-width="2"/>
+            <text x="1470" y="146" fill="#22324a" font-size="28" font-weight="800">关键说明</text>
+
+            <rect x="1462" y="186" rx="18" ry="18" width="270" height="144" fill="#ffffff" stroke="#f16f8d" stroke-width="3"/>
+            <text x="1490" y="222" fill="#8c2a45" font-size="20" font-weight="800">1. 离线和在线分离</text>
+            <text x="1490" y="250" fill="#667892" font-size="13">离线阶段生成 metadata.json。</text>
+            <text x="1490" y="272" fill="#667892" font-size="13">在线阶段读取元数据并重建内存检索器。</text>
+            <text x="1490" y="294" fill="#667892" font-size="13">这让流程更简单，也更方便调试。</text>
+
+            <rect x="1462" y="356" rx="18" ry="18" width="270" height="148" fill="#ffffff" stroke="#5f8ff6" stroke-width="3"/>
+            <text x="1490" y="392" fill="#2e5dbd" font-size="20" font-weight="800">2. ask / patch 共用检索底座</text>
+            <text x="1490" y="420" fill="#667892" font-size="13">两条路径都先做检索和 rerank，</text>
+            <text x="1490" y="442" fill="#667892" font-size="13">之后再分别组装 qa prompt</text>
+            <text x="1490" y="464" fill="#667892" font-size="13">或 patch prompt 并生成结果。</text>
+
+            <rect x="1462" y="530" rx="18" ry="18" width="270" height="136" fill="#ffffff" stroke="#9878ef" stroke-width="3"/>
+            <text x="1490" y="566" fill="#6e54c8" font-size="20" font-weight="800">3. deterministic fallback</text>
+            <text x="1490" y="594" fill="#667892" font-size="13">没有 API key 时依然可以运行。</text>
+            <text x="1490" y="616" fill="#667892" font-size="13">LLM 失败时也能回退到本地路径。</text>
+
+            <rect x="1462" y="692" rx="18" ry="18" width="270" height="156" fill="#ffffff" stroke="#59c78d" stroke-width="3"/>
+            <text x="1490" y="728" fill="#1e7d49" font-size="20" font-weight="800">4. benchmark 不是附属功能</text>
+            <text x="1490" y="756" fill="#667892" font-size="13">它直接回答“为什么要用 C++ 检索”。</text>
+            <text x="1490" y="778" fill="#667892" font-size="13">项目不仅能运行，还能量化对比</text>
+            <text x="1490" y="800" fill="#667892" font-size="13">Python baseline 和 native path 的差异。</text>
+
+            <rect x="1462" y="874" rx="18" ry="18" width="270" height="168" fill="#ffffff" stroke="#e5b44a" stroke-width="3"/>
+            <text x="1490" y="910" fill="#846114" font-size="20" font-weight="800">5. 最终展示链路</text>
+            <text x="1490" y="938" fill="#667892" font-size="13">推荐演示顺序：</text>
+            <text x="1490" y="962" fill="#667892" font-size="13">index -> ask -> patch -> benchmark</text>
+            <text x="1490" y="986" fill="#667892" font-size="13">这条链路最能体现项目的闭环。</text>
+
+            <rect x="1462" y="1068" rx="18" ry="18" width="270" height="250" fill="#f8fbff" stroke="#dbe4f2" stroke-width="2"/>
+            <text x="1490" y="1106" fill="#22324a" font-size="22" font-weight="800">对应文件</text>
+            <text x="1490" y="1136" fill="#667892" font-size="13">python/main.py</text>
+            <text x="1490" y="1158" fill="#667892" font-size="13">python/codebase_copilot/pipeline.py</text>
+            <text x="1490" y="1180" fill="#667892" font-size="13">python/codebase_copilot/agent.py</text>
+            <text x="1490" y="1202" fill="#667892" font-size="13">python/codebase_copilot/prompt.py</text>
+            <text x="1490" y="1224" fill="#667892" font-size="13">python/codebase_copilot/retriever.py</text>
+            <text x="1490" y="1246" fill="#667892" font-size="13">python/codebase_copilot/benchmark.py</text>
+            <text x="1490" y="1268" fill="#667892" font-size="13">cpp/src/vector_index.cpp</text>
+          </g>
+
+          <g stroke="#8ea3c5" stroke-width="3" fill="none" marker-end="url(#arrow)">
+            <path d="M 214 264 C 246 264, 270 234, 300 234"/>
+            <path d="M 214 464 C 246 464, 270 234, 300 234"/>
+            <path d="M 456 234 C 480 234, 488 234, 506 234"/>
+            <path d="M 652 234 C 676 234, 684 234, 702 234"/>
+            <path d="M 860 234 C 888 234, 894 234, 912 234"/>
+            <path d="M 1062 234 C 1088 234, 1096 234, 1114 234"/>
+
+            <path d="M 214 556 C 246 556, 272 560, 300 560"/>
+            <path d="M 450 560 C 468 560, 478 560, 494 560"/>
+            <path d="M 686 560 C 704 560, 714 560, 730 560"/>
+            <path d="M 874 560 C 892 560, 902 560, 914 560"/>
+            <path d="M 1084 560 C 1102 560, 1110 560, 1122 560"/>
+            <path d="M 1240 606 C 1240 620, 1240 634, 1240 658"/>
+            <path d="M 1084 606 C 1084 620, 954 634, 954 658"/>
+            <path d="M 1122 606 C 1122 620, 752 634, 752 658"/>
+            <path d="M 1038 658 C 1048 658, 1058 658, 1072 658"/>
+
+            <path d="M 214 646 C 246 646, 272 912, 300 912"/>
+            <path d="M 450 912 C 468 912, 478 912, 494 912"/>
+            <path d="M 692 912 C 712 912, 722 912, 738 912"/>
+            <path d="M 916 912 C 934 912, 944 912, 962 912"/>
+            <path d="M 1156 912 C 1176 912, 1184 912, 1196 912"/>
+            <path d="M 1360 958 C 1300 958, 1246 1012, 1094 1012"/>
+            <path d="M 1360 958 C 1312 958, 1236 1012, 812 1012"/>
+
+            <path d="M 214 736 C 246 736, 272 1256, 300 1256"/>
+            <path d="M 492 1256 C 508 1256, 518 1256, 528 1256"/>
+            <path d="M 712 1256 C 730 1256, 738 1256, 748 1256"/>
+            <path d="M 920 1256 C 938 1256, 946 1256, 956 1256"/>
+            <path d="M 1150 1256 C 1168 1256, 1176 1256, 1186 1256"/>
+          </g>
+
+          <g stroke="#c7d1e2" stroke-width="2" fill="none" stroke-dasharray="8 8">
+            <path d="M 1226 330 C 1226 392, 928 430, 928 514"/>
+            <path d="M 1226 330 C 1226 740, 360 780, 360 866"/>
+            <path d="M 1226 330 C 1226 1128, 1226 1128, 1226 1210"/>
+          </g>
+
+          <g font-family="Segoe UI, Microsoft YaHei, sans-serif" fill="#8a99b1" font-size="11">
+            <text x="1232" y="352">metadata.json 是 ask / patch 的共同输入</text>
+            <text x="1100" y="626">ask 在这里进入 prompt 和 answer synthesis</text>
+            <text x="1086" y="1038">patch 在这里输出 suggestion</text>
+            <text x="1188" y="1322">benchmark 最终输出 markdown 报告</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="footer">
+        建议直接用浏览器打开这个 HTML 文件。它更适合讲“系统是怎么跑起来的”，而不是讲模块之间的静态依赖关系。
+      </div>
+    </div>
+  </div>
+</body>
+</html>
