@@ -13,6 +13,14 @@ if str(PACKAGE_DIR) not in sys.path:
 
 from codebase_copilot.agent import CodebaseQAAgent
 from codebase_copilot.benchmark import build_benchmark_report, format_benchmark_table, run_benchmark_suite
+from codebase_copilot.cli_output import (
+    render_answer_output,
+    render_benchmark_output,
+    render_chunk_output,
+    render_index_output,
+    render_patch_output,
+    render_scan_output,
+)
 from codebase_copilot.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
 from codebase_copilot.llm import LLMRequestError, LLMSettings
 from codebase_copilot.pipeline import build_chunks, build_index, load_repository, write_chunks_json
@@ -117,23 +125,26 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _run_scan(args: argparse.Namespace) -> int:
     repo_files = load_repository(args.repo)
-    print(f"files={len(repo_files)}")
-    for repo_file in repo_files[: args.preview]:
-        print(f"{repo_file.relative_path} [{repo_file.language}] lines={repo_file.line_count}")
+    preview_rows = [
+        f"{repo_file.relative_path} [{repo_file.language}] lines={repo_file.line_count}"
+        for repo_file in repo_files[: args.preview]
+    ]
+    print(render_scan_output(len(repo_files), preview_rows))
     return 0
 
 
 def _run_chunk(args: argparse.Namespace) -> int:
     repo_files, chunks = build_chunks(args.repo, chunk_size=args.chunk_size, chunk_overlap=args.overlap)
-    print(f"files={len(repo_files)}")
-    print(f"chunks={len(chunks)}")
+    preview_rows = [
+        f"chunk_id={chunk.chunk_id} path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line}"
+        for chunk in chunks[: args.preview]
+    ]
 
-    for chunk in chunks[: args.preview]:
-        print(f"chunk_id={chunk.chunk_id} path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line}")
-
+    output_path: Path | None = None
     if args.output:
         output_path = write_chunks_json(chunks, args.output)
-        print(f"output={output_path}")
+
+    print(render_chunk_output(len(repo_files), len(chunks), preview_rows, output_path))
     return 0
 
 
@@ -145,10 +156,15 @@ def _run_index(args: argparse.Namespace) -> int:
         chunk_overlap=args.overlap,
         embedding_dimension=args.embedding_dim,
     )
-    print(f"files={result.file_count}")
-    print(f"chunks={result.chunk_count}")
-    print(f"retriever_size={result.retriever_size}")
-    print(f"metadata={result.metadata_path}")
+    print(
+        render_index_output(
+            repo_root=args.repo,
+            file_count=result.file_count,
+            chunk_count=result.chunk_count,
+            retriever_size=result.retriever_size,
+            metadata_path=result.metadata_path,
+        )
+    )
     return 0
 
 
@@ -166,22 +182,7 @@ def _run_ask(args: argparse.Namespace) -> int:
         print(f"error={exc}", file=sys.stderr)
         return 2
 
-    print(f"backend={result.backend}")
-    if result.notice:
-        print(f"notice={result.notice}")
-    print("answer=")
-    print(result.answer)
-    print(f"sources={len(result.sources)}")
-
-    for source in result.sources:
-        chunk = source.chunk
-        print(f"source path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line} score={source.score:.6f}")
-        for line in chunk.text.splitlines()[: max(args.preview_lines, 0)]:
-            print(f"  {line}")
-
-    if args.show_prompt:
-        print("prompt=")
-        print(result.prompt)
+    print(render_answer_output(result, preview_lines=args.preview_lines, show_prompt=args.show_prompt))
 
     return 0
 
@@ -200,22 +201,7 @@ def _run_patch(args: argparse.Namespace) -> int:
         print(f"error={exc}", file=sys.stderr)
         return 2
 
-    print(f"backend={result.backend}")
-    if result.notice:
-        print(f"notice={result.notice}")
-    print("suggestion=")
-    print(result.suggestion)
-    print(f"sources={len(result.sources)}")
-
-    for source in result.sources:
-        chunk = source.chunk
-        print(f"source path={chunk.relative_path} lines={chunk.start_line}-{chunk.end_line} score={source.score:.6f}")
-        for line in chunk.text.splitlines()[: max(args.preview_lines, 0)]:
-            print(f"  {line}")
-
-    if args.show_prompt:
-        print("prompt=")
-        print(result.prompt)
+    print(render_patch_output(result, preview_lines=args.preview_lines, show_prompt=args.show_prompt))
 
     return 0
 
@@ -253,17 +239,22 @@ def _run_benchmark(args: argparse.Namespace) -> int:
     table = format_benchmark_table(results)
     report = build_benchmark_report(results)
 
-    print(f"sizes={','.join(str(size) for size in dataset_sizes)}")
-    print(f"dimension={args.dimension}")
-    print(f"query_count={args.query_count}")
-    print(f"top_k={args.top_k}")
-    print(table)
-
+    output_path: Path | None = None
     if args.output:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(report, encoding="utf-8")
-        print(f"output={output_path.resolve()}")
+
+    print(
+        render_benchmark_output(
+            dataset_sizes=dataset_sizes,
+            dimension=args.dimension,
+            query_count=args.query_count,
+            top_k=args.top_k,
+            table=table,
+            output_path=output_path.resolve() if output_path is not None else None,
+        )
+    )
 
     return 0
 
