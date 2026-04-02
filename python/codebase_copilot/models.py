@@ -106,3 +106,24 @@ class PatchSuggestionResult:
     sources: list[RetrievedChunk]
     backend: str
     notice: str | None = None
+
+
+@dataclass(frozen=True)
+class AgentStep:
+    step_number: int
+    thought: str
+    action: str | None
+    observation: str | None
+    tool_name: str | None = None
+    tool_arguments: dict[str, object] | None = None
+    raw_response: str | None = None
+
+
+@dataclass(frozen=True)
+class AgentRunResult:
+    query: str
+    answer: str
+    prompt: str
+    steps: list[AgentStep]
+    backend: str
+    notice: str | None = None
