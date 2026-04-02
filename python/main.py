@@ -115,7 +115,7 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_parser.add_argument(
         "--preview-lines",
         type=int,
-        default=8,
+        default=80,
         help="Maximum number of observation lines to print for each agent step",
     )
     agent_parser.add_argument(

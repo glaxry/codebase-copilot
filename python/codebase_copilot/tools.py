@@ -7,6 +7,9 @@ from typing import Callable
 from .models import RetrievedChunk
 from .repo_loader import RepositoryLoader
 
+DEFAULT_READ_FILE_MAX_LINES = 100
+DEFAULT_TOOL_OBSERVATION_PREVIEW_LINES = 80
+
 
 def format_search_results(sources: list[RetrievedChunk]) -> str:
     if not sources:
@@ -41,6 +44,28 @@ def search_codebase(
     return format_search_results(sources)
 
 
+def truncate_tool_output(text: str, preview_lines: int = DEFAULT_TOOL_OBSERVATION_PREVIEW_LINES) -> str:
+    if preview_lines < 0:
+        return text
+
+    lines = text.splitlines()
+    if not lines:
+        return text
+
+    prefix: list[str] = []
+    body = lines
+    if lines[0].startswith("[") and lines[0].endswith("]"):
+        prefix = [lines[0]]
+        body = lines[1:]
+
+    if len(body) <= preview_lines:
+        return text
+
+    truncated = prefix + body[:preview_lines]
+    truncated.append(f"... ({len(body) - preview_lines} more lines omitted)")
+    return "\n".join(truncated)
+
+
 def _resolve_repo_path(repo_root: str | Path, relative_path: str) -> Path:
     root = Path(repo_root).resolve()
     candidate = (root / relative_path).resolve()
@@ -66,7 +91,7 @@ def read_file(
     path: str,
     start_line: int | None = None,
     end_line: int | None = None,
-    max_lines: int = 200,
+    max_lines: int = DEFAULT_READ_FILE_MAX_LINES,
 ) -> str:
     normalized_path = path.strip()
     if not normalized_path:

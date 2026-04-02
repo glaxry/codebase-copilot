@@ -122,3 +122,18 @@ def build_react_prompt(
         f"User Question:\n{query}\n\n"
         f"Scratchpad:\n{format_react_history(history_blocks)}\n"
     )
+
+
+def build_react_best_effort_prompt(query: str, history_blocks: list[str]) -> str:
+    return (
+        "You are finishing a ReAct-style code investigation after the tool-step budget has been used.\n"
+        "No more tool calls are allowed.\n"
+        "Write the best grounded final answer you can using only the existing scratchpad observations.\n"
+        "Requirements:\n"
+        "- summarize the strongest grounded findings first\n"
+        "- mention file paths when they appear in the observations\n"
+        "- explicitly say when the evidence is incomplete\n"
+        "- do not invent new tool results or files\n\n"
+        f"User Question:\n{query}\n\n"
+        f"Scratchpad:\n{format_react_history(history_blocks)}\n"
+    )

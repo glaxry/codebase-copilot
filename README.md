@@ -156,6 +156,7 @@ python test_day8_tool_dispatch.py
 python test_day8_react_loop.py
 python test_day8_no_tool.py
 python test_day8_agent_command.py
+python test_day8_agent_tuning.py
 ```
 
 ## Version Notes
@@ -187,6 +188,7 @@ python test_day8_agent_command.py
 - `docs/day8_v1_tools.md`
 - `docs/day8_v2_react_loop.md`
 - `docs/day8_v3_agent_command.md`
+- `docs/day8_v4_agent_iteration_tuning.md`
 
 ## Repository Notes
 

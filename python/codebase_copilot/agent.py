@@ -16,9 +16,16 @@ from .models import (
     PatchSuggestionResult,
     RetrievedChunk,
 )
-from .prompt import build_patch_prompt, build_qa_prompt, build_react_prompt
+from .prompt import build_patch_prompt, build_qa_prompt, build_react_best_effort_prompt, build_react_prompt
 from .retriever import VectorRetriever
-from .tools import list_files, read_file, search_codebase
+from .tools import (
+    DEFAULT_READ_FILE_MAX_LINES,
+    DEFAULT_TOOL_OBSERVATION_PREVIEW_LINES,
+    list_files,
+    read_file,
+    search_codebase,
+    truncate_tool_output,
+)
 
 
 QUERY_TERM_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+|[\u4e00-\u9fff]+")
@@ -219,15 +226,6 @@ def _format_react_history(steps: list[AgentStep]) -> list[str]:
     return blocks
 
 
-def _truncate_observation(text: str, max_lines: int = 40) -> str:
-    lines = text.splitlines()
-    if len(lines) <= max_lines:
-        return text
-    truncated = lines[:max_lines]
-    truncated.append(f"... ({len(lines) - max_lines} more lines omitted)")
-    return "\n".join(truncated)
-
-
 class LocalReActPlanner:
     """Deterministic planner that mimics a simple ReAct loop when no LLM is configured."""
 
@@ -420,6 +418,36 @@ def _parse_react_response(response: str) -> tuple[str, dict[str, Any] | None, st
         return thought, None, stripped
 
     return thought, None, "The agent did not produce a usable response."
+
+
+def _best_effort_summary_from_steps(query: str, steps: list[AgentStep]) -> str:
+    if not steps:
+        return f"I do not have enough grounded context to answer `{query}`."
+
+    observed_paths: list[str] = []
+    seen_paths: set[str] = set()
+    observations: list[str] = []
+
+    for step in steps:
+        if step.observation:
+            observations.append(step.observation.strip())
+            for match in SEARCH_RESULT_HEADER_PATTERN.finditer(step.observation):
+                path = match.group("path")
+                if path in seen_paths:
+                    continue
+                seen_paths.add(path)
+                observed_paths.append(path)
+
+    lines = [f"The agent used the full step budget while investigating `{query}`."]
+    if observed_paths:
+        lines.append(f"Best grounded leads: {', '.join(observed_paths[:3])}.")
+    if observations:
+        lines.append("Best-effort summary from the gathered observations:")
+        lines.append(truncate_tool_output(observations[-1], preview_lines=12))
+    else:
+        lines.append("No grounded observations were captured before the step budget was exhausted.")
+    lines.append("This summary is based only on the existing scratchpad, so it may be incomplete.")
+    return "\n".join(lines)
 
 
 class LocalAnswerSynthesizer:
@@ -1049,7 +1077,7 @@ class CodebaseQAAgent:
             query = str(arguments.get("query", ""))
             top_k = int(arguments.get("top_k", 4))
             result = search_codebase(self.retrieve, query, top_k=top_k)
-            return _truncate_observation(result)
+            return truncate_tool_output(result, preview_lines=DEFAULT_TOOL_OBSERVATION_PREVIEW_LINES)
 
         if tool_name == "read_file":
             path = str(arguments.get("path", ""))
@@ -1057,14 +1085,20 @@ class CodebaseQAAgent:
             end_line_value = arguments.get("end_line")
             start_line = int(start_line_value) if start_line_value is not None else None
             end_line = int(end_line_value) if end_line_value is not None else None
-            result = read_file(self.loaded_index.repo_root, path, start_line=start_line, end_line=end_line)
-            return _truncate_observation(result)
+            result = read_file(
+                self.loaded_index.repo_root,
+                path,
+                start_line=start_line,
+                end_line=end_line,
+                max_lines=DEFAULT_READ_FILE_MAX_LINES,
+            )
+            return truncate_tool_output(result, preview_lines=DEFAULT_TOOL_OBSERVATION_PREVIEW_LINES)
 
         if tool_name == "list_files":
             pattern_value = arguments.get("pattern")
             pattern = str(pattern_value) if pattern_value is not None else None
             result = list_files(self.loaded_index.repo_root, pattern=pattern)
-            return _truncate_observation(result)
+            return truncate_tool_output(result, preview_lines=DEFAULT_TOOL_OBSERVATION_PREVIEW_LINES)
 
         return f"error=unknown tool: {tool_name}"
 
@@ -1098,11 +1132,9 @@ class CodebaseQAAgent:
 
             return final_answer or "The agent finished without a final answer.", steps, final_prompt
 
-        if steps:
-            fallback = self.react_planner._build_default_final(query, steps)
-        else:
-            fallback = f"I do not have enough grounded context to answer `{query}`."
-        return fallback, steps, final_prompt
+        summary_prompt = build_react_best_effort_prompt(query, _format_react_history(steps))
+        fallback = _best_effort_summary_from_steps(query, steps)
+        return fallback, steps, summary_prompt
 
     def _run_llm_agent_loop(self, query: str, max_steps: int) -> tuple[str, list[AgentStep], str]:
         if self.llm_synthesizer is None:
@@ -1140,8 +1172,12 @@ class CodebaseQAAgent:
 
             return final_answer or "The agent finished without a final answer.", steps, final_prompt
 
-        fallback = "The agent reached the maximum number of steps without producing a final answer."
-        return fallback, steps, final_prompt
+        summary_prompt = build_react_best_effort_prompt(query, _format_react_history(steps))
+        try:
+            summary = self.llm_synthesizer.generate(summary_prompt)
+        except LLMRequestError:
+            summary = _best_effort_summary_from_steps(query, steps)
+        return summary, steps, summary_prompt
 
     def ask(self, query: str, top_k: int = 4, answer_mode: str = "auto") -> AnswerResult:
         self._ensure_answer_mode(answer_mode)
