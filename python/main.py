@@ -140,6 +140,32 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print the assembled ReAct prompt for debugging",
     )
 
+    chat_parser = subparsers.add_parser("chat", help="Start a basic interactive chat loop with agent memory")
+    chat_parser.add_argument("--index", default="data/metadata.json", help="Path to metadata JSON")
+    chat_parser.add_argument(
+        "--mode",
+        choices=("agent", "ask", "patch"),
+        default="agent",
+        help="Initial chat mode",
+    )
+    chat_parser.add_argument("--max-steps", type=int, default=6, help="Maximum number of ReAct tool steps in agent mode")
+    chat_parser.add_argument("--top-k", type=int, default=4, help="Number of chunks to retrieve in ask/patch mode")
+    chat_parser.add_argument(
+        "--answer-mode",
+        choices=("auto", "local", "llm"),
+        default="auto",
+        help="Choose local fallback, force llm, or automatically use llm when configured",
+    )
+    chat_parser.add_argument("--llm-model", help="Override the model name for OpenAI-compatible backends")
+    chat_parser.add_argument("--llm-base-url", help="Override the OpenAI-compatible API base URL")
+    chat_parser.add_argument("--llm-timeout", type=float, help="Override the LLM request timeout in seconds")
+    chat_parser.add_argument(
+        "--preview-lines",
+        type=int,
+        default=40,
+        help="Maximum number of preview lines to show in chat output",
+    )
+
     benchmark_parser = subparsers.add_parser("benchmark", help="Run the Day 6 Python vs C++ retrieval benchmark")
     benchmark_parser.add_argument(
         "--sizes",
@@ -270,6 +296,50 @@ def _run_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_chat(args: argparse.Namespace) -> int:
+    llm_settings = LLMSettings.from_env(
+        base_url=args.llm_base_url,
+        model=args.llm_model,
+        timeout_seconds=args.llm_timeout,
+    )
+    agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
+
+    print("Chat session started. Type /clear to reset agent memory, or exit/quit to leave.")
+    while True:
+        try:
+            message = input("chat> ").strip()
+        except KeyboardInterrupt:
+            print("\nchat closed.")
+            return 0
+        except EOFError:
+            print("\nchat closed.")
+            return 0
+
+        if not message:
+            continue
+        if message in {"exit", "quit"}:
+            print("chat closed.")
+            return 0
+        if message == "/clear":
+            agent.clear_history()
+            print("history cleared.")
+            continue
+
+        try:
+            if args.mode == "agent":
+                result = agent.agent_run(message, max_steps=args.max_steps, answer_mode=args.answer_mode)
+                print(render_agent_output(result, preview_lines=args.preview_lines, show_prompt=False))
+            elif args.mode == "ask":
+                result = agent.ask(message, top_k=args.top_k, answer_mode=args.answer_mode)
+                print(render_answer_output(result, preview_lines=args.preview_lines, show_prompt=False))
+            else:
+                result = agent.patch(message, top_k=args.top_k, answer_mode=args.answer_mode)
+                print(render_patch_output(result, preview_lines=args.preview_lines, show_prompt=False))
+        except (LLMRequestError, ValueError) as exc:
+            print(f"error={exc}", file=sys.stderr)
+            return 2
+
+
 def _parse_benchmark_sizes(raw_sizes: str) -> list[int]:
     sizes: list[int] = []
     for part in raw_sizes.split(","):
@@ -339,6 +409,8 @@ def main() -> int:
         return _run_patch(args)
     if args.command == "agent":
         return _run_agent(args)
+    if args.command == "chat":
+        return _run_chat(args)
     if args.command == "benchmark":
         return _run_benchmark(args)
 

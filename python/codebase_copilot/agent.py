@@ -26,6 +26,7 @@ from .tools import (
     search_codebase,
     truncate_tool_output,
 )
+from .config import DEFAULT_AGENT_MEMORY_WINDOW
 
 
 QUERY_TERM_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+|[\u4e00-\u9fff]+")
@@ -891,6 +892,8 @@ class CodebaseQAAgent:
         self.llm_synthesizer = (
             OpenAICompatibleChatSynthesizer(llm_settings) if llm_settings is not None else None
         )
+        self.conversation_history: list[dict[str, str]] = []
+        self.memory_window = DEFAULT_AGENT_MEMORY_WINDOW
         self.retriever = VectorRetriever()
         self._chunk_by_id = {chunk.chunk_id: chunk for chunk in loaded_index.chunks}
 
@@ -1069,6 +1072,28 @@ class CodebaseQAAgent:
         if answer_mode not in {"auto", "local", "llm"}:
             raise ValueError(f"Unsupported answer mode: {answer_mode}")
 
+    def clear_history(self) -> None:
+        self.conversation_history.clear()
+
+    def _conversation_blocks(self) -> list[str]:
+        recent_turns = self.conversation_history[-self.memory_window :]
+        blocks: list[str] = []
+        for turn in recent_turns:
+            blocks.append(f"[User]: {turn['user']}\n[Assistant]: {turn['assistant']}")
+        return blocks
+
+    def _record_conversation_turn(self, query: str, answer: str) -> None:
+        normalized_query = query.strip()
+        normalized_answer = answer.strip()
+        if not normalized_query or not normalized_answer:
+            return
+        self.conversation_history.append(
+            {
+                "user": normalized_query,
+                "assistant": normalized_answer,
+            }
+        )
+
     def execute_tool(self, tool_name: str, arguments: dict[str, object] | None = None) -> str:
         arguments = arguments or {}
 
@@ -1103,10 +1128,21 @@ class CodebaseQAAgent:
 
     def _run_local_agent_loop(self, query: str, max_steps: int) -> tuple[str, list[AgentStep], str]:
         steps: list[AgentStep] = []
-        final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+        conversation_blocks = self._conversation_blocks()
+        final_prompt = build_react_prompt(
+            query,
+            _format_react_history(steps),
+            max_steps=max_steps,
+            conversation_blocks=conversation_blocks,
+        )
 
         for step_number in range(1, max_steps + 1):
-            final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+            final_prompt = build_react_prompt(
+                query,
+                _format_react_history(steps),
+                max_steps=max_steps,
+                conversation_blocks=conversation_blocks,
+            )
             response = self.react_planner.generate(query, steps, max_steps)
             thought, tool_call, final_answer = _parse_react_response(response)
 
@@ -1131,7 +1167,11 @@ class CodebaseQAAgent:
 
             return final_answer or "The agent finished without a final answer.", steps, final_prompt
 
-        summary_prompt = build_react_best_effort_prompt(query, _format_react_history(steps))
+        summary_prompt = build_react_best_effort_prompt(
+            query,
+            _format_react_history(steps),
+            conversation_blocks=conversation_blocks,
+        )
         fallback = _best_effort_summary_from_steps(query, steps)
         return fallback, steps, summary_prompt
 
@@ -1143,10 +1183,21 @@ class CodebaseQAAgent:
             )
 
         steps: list[AgentStep] = []
-        final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+        conversation_blocks = self._conversation_blocks()
+        final_prompt = build_react_prompt(
+            query,
+            _format_react_history(steps),
+            max_steps=max_steps,
+            conversation_blocks=conversation_blocks,
+        )
 
         for step_number in range(1, max_steps + 1):
-            final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+            final_prompt = build_react_prompt(
+                query,
+                _format_react_history(steps),
+                max_steps=max_steps,
+                conversation_blocks=conversation_blocks,
+            )
             response = self.llm_synthesizer.generate(final_prompt)
             thought, tool_call, final_answer = _parse_react_response(response)
 
@@ -1171,7 +1222,11 @@ class CodebaseQAAgent:
 
             return final_answer or "The agent finished without a final answer.", steps, final_prompt
 
-        summary_prompt = build_react_best_effort_prompt(query, _format_react_history(steps))
+        summary_prompt = build_react_best_effort_prompt(
+            query,
+            _format_react_history(steps),
+            conversation_blocks=conversation_blocks,
+        )
         try:
             summary = self.llm_synthesizer.generate(summary_prompt)
         except LLMRequestError:
@@ -1293,6 +1348,7 @@ class CodebaseQAAgent:
 
         if answer_mode == "local":
             answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
                 answer=answer,
@@ -1308,6 +1364,7 @@ class CodebaseQAAgent:
                     "or OPENAI_API_KEY."
                 )
             answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
                 answer=answer,
@@ -1318,6 +1375,7 @@ class CodebaseQAAgent:
 
         try:
             answer, steps, prompt = self._run_llm_agent_loop(query, max_steps=max_steps)
+            self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
                 answer=answer,
@@ -1330,6 +1388,7 @@ class CodebaseQAAgent:
                 raise
 
             answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
                 answer=answer,

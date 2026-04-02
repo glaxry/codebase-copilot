@@ -65,11 +65,19 @@ def format_react_history(history_blocks: list[str]) -> str:
     return "\n\n".join(history_blocks)
 
 
+def format_conversation_memory(memory_blocks: list[str]) -> str:
+    if not memory_blocks:
+        return "No previous conversation history."
+    return "\n\n".join(memory_blocks)
+
+
 def build_react_prompt(
     query: str,
     history_blocks: list[str],
     max_steps: int,
+    conversation_blocks: list[str] | None = None,
 ) -> str:
+    conversation_blocks = conversation_blocks or []
     example_search = json.dumps(
         {
             "name": "search_codebase",
@@ -119,12 +127,18 @@ def build_react_prompt(
         f"<tool_call>{example_list}</tool_call>\n\n"
         "<thought>The question is a simple capability question, so I can answer directly.</thought>\n"
         "<final_answer>I can search indexed code, read repository files, and list files inside the repo.</final_answer>\n\n"
+        f"Recent Conversation:\n{format_conversation_memory(conversation_blocks)}\n\n"
         f"User Question:\n{query}\n\n"
         f"Scratchpad:\n{format_react_history(history_blocks)}\n"
     )
 
 
-def build_react_best_effort_prompt(query: str, history_blocks: list[str]) -> str:
+def build_react_best_effort_prompt(
+    query: str,
+    history_blocks: list[str],
+    conversation_blocks: list[str] | None = None,
+) -> str:
+    conversation_blocks = conversation_blocks or []
     return (
         "You are finishing a ReAct-style code investigation after the tool-step budget has been used.\n"
         "No more tool calls are allowed.\n"
@@ -134,6 +148,7 @@ def build_react_best_effort_prompt(query: str, history_blocks: list[str]) -> str
         "- mention file paths when they appear in the observations\n"
         "- explicitly say when the evidence is incomplete\n"
         "- do not invent new tool results or files\n\n"
+        f"Recent Conversation:\n{format_conversation_memory(conversation_blocks)}\n\n"
         f"User Question:\n{query}\n\n"
         f"Scratchpad:\n{format_react_history(history_blocks)}\n"
     )
