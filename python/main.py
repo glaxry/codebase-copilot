@@ -22,7 +22,12 @@ from codebase_copilot.cli_output import (
     render_patch_output,
     render_scan_output,
 )
-from codebase_copilot.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
+from codebase_copilot.config import (
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_EMBEDDING_PROVIDER,
+    DEFAULT_SEMANTIC_EMBEDDING_MODEL,
+)
 from codebase_copilot.llm import LLMRequestError, LLMSettings
 from codebase_copilot.pipeline import build_chunks, build_index, load_repository, write_chunks_json
 
@@ -47,6 +52,17 @@ def _build_parser() -> argparse.ArgumentParser:
     index_parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     index_parser.add_argument("--overlap", type=int, default=DEFAULT_CHUNK_OVERLAP)
     index_parser.add_argument("--embedding-dim", type=int, default=256)
+    index_parser.add_argument(
+        "--embedding-provider",
+        choices=("hashing", "semantic"),
+        default=DEFAULT_EMBEDDING_PROVIDER,
+        help="Embedding provider used for index construction",
+    )
+    index_parser.add_argument(
+        "--embedding-model",
+        default=DEFAULT_SEMANTIC_EMBEDDING_MODEL,
+        help="Semantic embedding model name when --embedding-provider semantic is used",
+    )
     index_parser.add_argument("--output", default="data/metadata.json", help="Path to write metadata JSON")
 
     ask_parser = subparsers.add_parser("ask", help="Ask a question against a Day 4 metadata index")
@@ -181,6 +197,8 @@ def _run_index(args: argparse.Namespace) -> int:
         chunk_size=args.chunk_size,
         chunk_overlap=args.overlap,
         embedding_dimension=args.embedding_dim,
+        embedding_provider=args.embedding_provider,
+        embedding_model=args.embedding_model if args.embedding_provider == "semantic" else None,
     )
     print(
         render_index_output(
@@ -189,6 +207,8 @@ def _run_index(args: argparse.Namespace) -> int:
             chunk_count=result.chunk_count,
             retriever_size=result.retriever_size,
             metadata_path=result.metadata_path,
+            embedding_provider=result.embedding_provider,
+            embedding_model=result.embedding_model,
         )
     )
     return 0

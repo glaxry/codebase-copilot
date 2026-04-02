@@ -67,6 +67,8 @@ class IndexBuildResult:
     chunk_count: int
     embedding_dimension: int
     retriever_size: int
+    embedding_provider: str = "hashing"
+    embedding_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,7 @@ class LoadedIndex:
     metadata_path: Path
     embedding_provider: str
     embedding_dimension: int
+    embedding_model: str | None
     chunk_size: int
     chunk_overlap: int
     file_count: int

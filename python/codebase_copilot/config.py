@@ -2,6 +2,9 @@ from __future__ import annotations
 
 DEFAULT_CHUNK_SIZE = 120
 DEFAULT_CHUNK_OVERLAP = 30
+DEFAULT_EMBEDDING_PROVIDER = "hashing"
+DEFAULT_SEMANTIC_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_AGENT_MEMORY_WINDOW = 3
 
 DEFAULT_LLM_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"

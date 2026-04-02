@@ -2,7 +2,8 @@
 
 from .agent import CodebaseQAAgent, LocalAnswerSynthesizer, LocalPatchSynthesizer, load_index_metadata
 from .chunker import CodeChunker
-from .embedder import HashingEmbedder
+from .embedder import HashingEmbedder, create_embedder
+from .embedder_semantic import SentenceTransformerEmbedder
 from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
 from .models import (
     AnswerResult,
@@ -25,6 +26,7 @@ __all__ = [
     "CodeChunk",
     "CodebaseQAAgent",
     "CodeChunker",
+    "create_embedder",
     "format_patch_contexts",
     "format_qa_contexts",
     "HashingEmbedder",
@@ -39,6 +41,7 @@ __all__ = [
     "RepoFile",
     "RepositoryLoader",
     "RetrievedChunk",
+    "SentenceTransformerEmbedder",
     "VectorRetriever",
     "build_chunks",
     "build_index",

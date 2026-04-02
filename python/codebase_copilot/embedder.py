@@ -6,6 +6,8 @@ from typing import Iterable
 
 import numpy as np
 
+from .config import DEFAULT_EMBEDDING_PROVIDER, DEFAULT_SEMANTIC_EMBEDDING_MODEL
+
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+|[^\s]")
 
@@ -42,3 +44,23 @@ class HashingEmbedder:
         if not rows:
             return np.empty((0, self.dimension), dtype=np.float32)
         return np.vstack(rows).astype(np.float32)
+
+
+def create_embedder(
+    provider: str = DEFAULT_EMBEDDING_PROVIDER,
+    *,
+    dimension: int = 256,
+    model_name: str | None = None,
+) -> HashingEmbedder | "SentenceTransformerEmbedder":
+    normalized_provider = provider.strip().lower()
+
+    if normalized_provider == "hashing":
+        return HashingEmbedder(dimension=dimension)
+
+    if normalized_provider == "semantic":
+        from .embedder_semantic import SentenceTransformerEmbedder
+
+        resolved_model = (model_name or DEFAULT_SEMANTIC_EMBEDDING_MODEL).strip()
+        return SentenceTransformerEmbedder(model_name=resolved_model)
+
+    raise ValueError(f"Unsupported embedding provider: {provider}")

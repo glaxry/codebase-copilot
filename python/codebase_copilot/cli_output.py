@@ -50,12 +50,23 @@ def render_chunk_output(
     return "\n".join(lines)
 
 
-def render_index_output(repo_root: str, file_count: int, chunk_count: int, retriever_size: int, metadata_path: Path) -> str:
+def render_index_output(
+    repo_root: str,
+    file_count: int,
+    chunk_count: int,
+    retriever_size: int,
+    metadata_path: Path,
+    embedding_provider: str,
+    embedding_model: str | None,
+) -> str:
     lines = _header("INDEX RESULT")
     lines.append(f"repo={repo_root}")
     lines.append(f"files={file_count}")
     lines.append(f"chunks={chunk_count}")
     lines.append(f"retriever_size={retriever_size}")
+    lines.append(f"embedding_provider={embedding_provider}")
+    if embedding_model is not None:
+        lines.append(f"embedding_model={embedding_model}")
     lines.append(f"metadata={metadata_path}")
     return "\n".join(lines)
 

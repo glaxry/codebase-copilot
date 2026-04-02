@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from .chunker import CodeChunker
-from .config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
-from .embedder import HashingEmbedder
+from .config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, DEFAULT_EMBEDDING_PROVIDER
+from .embedder import create_embedder
 from .models import CodeChunk, IndexBuildResult, RepoFile
 from .repo_loader import RepositoryLoader
 from .retriever import VectorRetriever
@@ -46,12 +46,21 @@ def build_index(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
     embedding_dimension: int = 256,
+    embedding_provider: str = DEFAULT_EMBEDDING_PROVIDER,
+    embedding_model: str | None = None,
 ) -> IndexBuildResult:
     repo_root_path = Path(repo_root).resolve()
     repo_files, chunks = build_chunks(repo_root_path, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    embedder = HashingEmbedder(dimension=embedding_dimension)
+    embedder = create_embedder(
+        embedding_provider,
+        dimension=embedding_dimension,
+        model_name=embedding_model,
+    )
     embeddings = embedder.embed_texts([chunk.to_embedding_text() for chunk in chunks])
+    resolved_dimension = int(getattr(embedder, "dimension", embedding_dimension))
+    resolved_model = getattr(embedder, "model_name", None)
+    resolved_provider = embedding_provider.strip().lower()
 
     retriever = VectorRetriever()
     if chunks:
@@ -62,8 +71,8 @@ def build_index(
     payload = {
         "repo_root": str(repo_root_path),
         "embedding": {
-            "provider": "hashing",
-            "dimension": embedding_dimension,
+            "provider": resolved_provider,
+            "dimension": resolved_dimension,
         },
         "chunking": {
             "chunk_size": chunk_size,
@@ -73,6 +82,8 @@ def build_index(
         "chunk_count": len(chunks),
         "chunks": serialize_chunks(chunks),
     }
+    if resolved_model is not None:
+        payload["embedding"]["model"] = resolved_model
     metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return IndexBuildResult(
@@ -80,6 +91,8 @@ def build_index(
         metadata_path=metadata_path,
         file_count=len(repo_files),
         chunk_count=len(chunks),
-        embedding_dimension=embedding_dimension,
+        embedding_dimension=resolved_dimension,
         retriever_size=retriever.size,
+        embedding_provider=resolved_provider,
+        embedding_model=resolved_model,
     )

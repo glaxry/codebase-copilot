@@ -5,7 +5,7 @@ import re
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .embedder import HashingEmbedder
+from .embedder import create_embedder
 from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
 from .models import (
     AgentRunResult,
@@ -193,6 +193,7 @@ def load_index_metadata(metadata_path: str | Path) -> LoadedIndex:
         metadata_path=path,
         embedding_provider=str(embedding_config["provider"]),
         embedding_dimension=int(embedding_config["dimension"]),
+        embedding_model=str(embedding_config["model"]) if embedding_config.get("model") else None,
         chunk_size=int(chunking_config["chunk_size"]),
         chunk_overlap=int(chunking_config["chunk_overlap"]),
         file_count=int(payload["file_count"]),
@@ -878,14 +879,12 @@ class CodebaseQAAgent:
         patch_synthesizer: LocalPatchSynthesizer | None = None,
         llm_settings: LLMSettings | None = None,
     ) -> None:
-        if loaded_index.embedding_provider != "hashing":
-            raise ValueError(
-                f"Unsupported embedding provider: {loaded_index.embedding_provider}. "
-                "Only the local hashing embedder is supported right now."
-            )
-
         self.loaded_index = loaded_index
-        self.embedder = HashingEmbedder(dimension=loaded_index.embedding_dimension)
+        self.embedder = create_embedder(
+            loaded_index.embedding_provider,
+            dimension=loaded_index.embedding_dimension,
+            model_name=loaded_index.embedding_model,
+        )
         self.answer_synthesizer = answer_synthesizer or LocalAnswerSynthesizer()
         self.patch_synthesizer = patch_synthesizer or LocalPatchSynthesizer()
         self.react_planner = LocalReActPlanner()
