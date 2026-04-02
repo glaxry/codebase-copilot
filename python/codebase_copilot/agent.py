@@ -3,12 +3,22 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from .embedder import HashingEmbedder
 from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
-from .models import AnswerResult, CodeChunk, LoadedIndex, PatchSuggestionResult, RetrievedChunk
-from .prompt import build_patch_prompt, build_qa_prompt
+from .models import (
+    AgentRunResult,
+    AgentStep,
+    AnswerResult,
+    CodeChunk,
+    LoadedIndex,
+    PatchSuggestionResult,
+    RetrievedChunk,
+)
+from .prompt import build_patch_prompt, build_qa_prompt, build_react_prompt
 from .retriever import VectorRetriever
+from .tools import list_files, read_file, search_codebase
 
 
 QUERY_TERM_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+|[\u4e00-\u9fff]+")
@@ -101,6 +111,13 @@ PATCH_REQUEST_TERMS = {
     "suggest",
     "update",
 }
+REACT_THOUGHT_PATTERN = re.compile(r"<thought>(.*?)</thought>", re.IGNORECASE | re.DOTALL)
+REACT_TOOL_CALL_PATTERN = re.compile(r"<tool_call>(.*?)</tool_call>", re.IGNORECASE | re.DOTALL)
+REACT_FINAL_PATTERN = re.compile(r"<final_answer>(.*?)</final_answer>", re.IGNORECASE | re.DOTALL)
+SEARCH_RESULT_HEADER_PATTERN = re.compile(
+    r"^\[(?P<path>.+?) lines (?P<start>\d+)-(?P<end>\d+)\]$",
+    re.MULTILINE,
+)
 
 
 def _extract_query_terms(text: str) -> list[str]:
@@ -175,6 +192,234 @@ def load_index_metadata(metadata_path: str | Path) -> LoadedIndex:
         chunk_count=int(payload["chunk_count"]),
         chunks=chunks,
     )
+
+
+def _extract_tag(pattern: re.Pattern[str], text: str) -> str | None:
+    match = pattern.search(text)
+    if match is None:
+        return None
+    content = match.group(1).strip()
+    return content or None
+
+
+def _format_tool_action(tool_name: str, arguments: dict[str, object]) -> str:
+    rendered_arguments = ", ".join(f"{key}={value!r}" for key, value in arguments.items())
+    return f"{tool_name}({rendered_arguments})" if rendered_arguments else f"{tool_name}()"
+
+
+def _format_react_history(steps: list[AgentStep]) -> list[str]:
+    blocks: list[str] = []
+    for step in steps:
+        lines = [f"[Step {step.step_number}] Thought: {step.thought}"]
+        if step.action is not None:
+            lines.append(f"[Step {step.step_number}] Action: {step.action}")
+        if step.observation is not None:
+            lines.append(f"[Step {step.step_number}] Observation:\n{step.observation}")
+        blocks.append("\n".join(lines))
+    return blocks
+
+
+def _truncate_observation(text: str, max_lines: int = 40) -> str:
+    lines = text.splitlines()
+    if len(lines) <= max_lines:
+        return text
+    truncated = lines[:max_lines]
+    truncated.append(f"... ({len(lines) - max_lines} more lines omitted)")
+    return "\n".join(truncated)
+
+
+class LocalReActPlanner:
+    """Deterministic planner that mimics a simple ReAct loop when no LLM is configured."""
+
+    def generate(self, query: str, steps: list[AgentStep], max_steps: int) -> str:
+        query_lower = query.lower().strip()
+        if not steps and self._is_direct_answer_query(query_lower):
+            return (
+                "<thought>The user is asking about my capabilities, so I can answer directly.</thought>\n"
+                "<final_answer>I can search indexed code, read repository files, and list supported files inside the repo.</final_answer>"
+            )
+
+        if not steps:
+            if self._should_list_before_search(query_lower):
+                return (
+                    "<thought>I should list the relevant files first to narrow down the search space.</thought>\n"
+                    '<tool_call>{"name":"list_files","arguments":{"pattern":"*.py"}}</tool_call>'
+                )
+            search_query = self._build_search_query(query)
+            return (
+                "<thought>I should search the indexed codebase before answering.</thought>\n"
+                f'<tool_call>{json.dumps({"name": "search_codebase", "arguments": {"query": search_query, "top_k": 4}}, ensure_ascii=False)}</tool_call>'
+            )
+
+        last_step = steps[-1]
+        if last_step.tool_name == "list_files":
+            search_query = self._build_search_query(query)
+            return (
+                "<thought>I now know the repository shape, so I should search the codebase for the most relevant file.</thought>\n"
+                f'<tool_call>{json.dumps({"name": "search_codebase", "arguments": {"query": search_query, "top_k": 4}}, ensure_ascii=False)}</tool_call>'
+            )
+
+        if last_step.tool_name == "search_codebase":
+            if last_step.observation and last_step.observation.startswith("error="):
+                return (
+                    "<thought>The search failed, so I should stop and report the error.</thought>\n"
+                    f"<final_answer>{last_step.observation}</final_answer>"
+                )
+
+            location = self._extract_first_location(last_step.observation or "")
+            if location is None:
+                return (
+                    "<thought>The search did not return a concrete file, so I should stop instead of guessing.</thought>\n"
+                    "<final_answer>I could not find a grounded answer from the indexed codebase.</final_answer>"
+                )
+
+            path, start_line, end_line = location
+            if self._should_read_after_search(query_lower, steps, max_steps):
+                read_start = max(1, start_line - 6)
+                read_end = end_line + 12
+                return (
+                    "<thought>I found the most relevant file, and I should inspect the surrounding lines before answering.</thought>\n"
+                    f'<tool_call>{json.dumps({"name": "read_file", "arguments": {"path": path, "start_line": read_start, "end_line": read_end}}, ensure_ascii=False)}</tool_call>'
+                )
+
+            return (
+                "<thought>The search result is already specific enough to answer.</thought>\n"
+                f"<final_answer>{self._build_final_from_search(query, last_step.observation or '')}</final_answer>"
+            )
+
+        if last_step.tool_name == "read_file":
+            return (
+                "<thought>I have the focused file content, so I can now answer directly.</thought>\n"
+                f"<final_answer>{self._build_final_from_file(query, last_step.observation or '')}</final_answer>"
+            )
+
+        return (
+            "<thought>I already have enough context to stop.</thought>\n"
+            f"<final_answer>{self._build_default_final(query, steps)}</final_answer>"
+        )
+
+    @staticmethod
+    def _is_direct_answer_query(query_lower: str) -> bool:
+        return any(
+            phrase in query_lower
+            for phrase in (
+                "what can you do",
+                "what tools can you use",
+                "which tools can you use",
+                "your tools",
+                "your capabilities",
+            )
+        )
+
+    @staticmethod
+    def _should_list_before_search(query_lower: str) -> bool:
+        return "list" in query_lower and "file" in query_lower
+
+    @staticmethod
+    def _build_search_query(query: str) -> str:
+        query_lower = query.lower()
+        if "entry point" in query_lower:
+            return "application entry point main function"
+        if "ask command" in query_lower:
+            return "ask command workflow _run_ask main argparse"
+        if "patch" in query_lower and "validation" in query_lower:
+            return "input validation login flow"
+        return query.strip()
+
+    @staticmethod
+    def _extract_first_location(observation: str) -> tuple[str, int, int] | None:
+        match = SEARCH_RESULT_HEADER_PATTERN.search(observation)
+        if match is None:
+            return None
+        return (
+            match.group("path"),
+            int(match.group("start")),
+            int(match.group("end")),
+        )
+
+    @staticmethod
+    def _should_read_after_search(query_lower: str, steps: list[AgentStep], max_steps: int) -> bool:
+        if len(steps) >= max_steps:
+            return False
+        return any(
+            phrase in query_lower
+            for phrase in (
+                "entry point",
+                "workflow",
+                "implementation",
+                "how",
+                "main function",
+                "show",
+                "read",
+            )
+        )
+
+    def _build_final_from_search(self, query: str, observation: str) -> str:
+        location = self._extract_first_location(observation)
+        if location is None:
+            return "I could not find a grounded answer from the indexed codebase."
+        path, start_line, end_line = location
+        if "entry point" in query.lower():
+            return f"The application entry point is most likely in {path} around lines {start_line}-{end_line}."
+        return f"The strongest grounded match is {path} around lines {start_line}-{end_line}."
+
+    def _build_final_from_file(self, query: str, observation: str) -> str:
+        location = self._extract_first_location(observation)
+        if location is None:
+            return self._build_default_final(query, [])
+        path, start_line, end_line = location
+        content = "\n".join(line for line in observation.splitlines()[1:7] if line.strip())
+        if "entry point" in query.lower() and "def main" in observation:
+            return (
+                f"The application entry point is {path} around lines {start_line}-{end_line}. "
+                "The file defines `main()` and uses the standard `if __name__ == \"__main__\"` style entry path.\n\n"
+                f"Key excerpt:\n{content}"
+            )
+        if "ask command" in query.lower():
+            return (
+                f"The ask command workflow is handled in {path} around lines {start_line}-{end_line}. "
+                "That file wires the CLI parser and dispatches the `ask` subcommand.\n\n"
+                f"Key excerpt:\n{content}"
+            )
+        return (
+            f"The relevant implementation is in {path} around lines {start_line}-{end_line}.\n\n"
+            f"Key excerpt:\n{content}"
+        )
+
+    @staticmethod
+    def _build_default_final(query: str, steps: list[AgentStep]) -> str:
+        if steps:
+            last_observation = steps[-1].observation or ""
+            if last_observation:
+                return f"Based on the latest tool observation, the grounded result is:\n{last_observation}"
+        return f"I do not have enough grounded context to answer `{query}`."
+
+
+def _parse_react_response(response: str) -> tuple[str, dict[str, Any] | None, str | None]:
+    thought = _extract_tag(REACT_THOUGHT_PATTERN, response) or "No explicit thought provided."
+    tool_payload = _extract_tag(REACT_TOOL_CALL_PATTERN, response)
+    final_answer = _extract_tag(REACT_FINAL_PATTERN, response)
+
+    if tool_payload is not None:
+        try:
+            tool_call = json.loads(tool_payload)
+        except json.JSONDecodeError:
+            tool_call = {
+                "name": "__parse_error__",
+                "arguments": {
+                    "payload": tool_payload,
+                },
+            }
+        return thought, tool_call, None
+
+    if final_answer is not None:
+        return thought, None, final_answer
+
+    stripped = response.strip()
+    if stripped:
+        return thought, None, stripped
+
+    return thought, None, "The agent did not produce a usable response."
 
 
 class LocalAnswerSynthesizer:
@@ -615,6 +860,7 @@ class CodebaseQAAgent:
         self.embedder = HashingEmbedder(dimension=loaded_index.embedding_dimension)
         self.answer_synthesizer = answer_synthesizer or LocalAnswerSynthesizer()
         self.patch_synthesizer = patch_synthesizer or LocalPatchSynthesizer()
+        self.react_planner = LocalReActPlanner()
         self.llm_synthesizer = (
             OpenAICompatibleChatSynthesizer(llm_settings) if llm_settings is not None else None
         )
@@ -796,6 +1042,107 @@ class CodebaseQAAgent:
         if answer_mode not in {"auto", "local", "llm"}:
             raise ValueError(f"Unsupported answer mode: {answer_mode}")
 
+    def execute_tool(self, tool_name: str, arguments: dict[str, object] | None = None) -> str:
+        arguments = arguments or {}
+
+        if tool_name == "search_codebase":
+            query = str(arguments.get("query", ""))
+            top_k = int(arguments.get("top_k", 4))
+            result = search_codebase(self.retrieve, query, top_k=top_k)
+            return _truncate_observation(result)
+
+        if tool_name == "read_file":
+            path = str(arguments.get("path", ""))
+            start_line_value = arguments.get("start_line")
+            end_line_value = arguments.get("end_line")
+            start_line = int(start_line_value) if start_line_value is not None else None
+            end_line = int(end_line_value) if end_line_value is not None else None
+            result = read_file(self.loaded_index.repo_root, path, start_line=start_line, end_line=end_line)
+            return _truncate_observation(result)
+
+        if tool_name == "list_files":
+            pattern_value = arguments.get("pattern")
+            pattern = str(pattern_value) if pattern_value is not None else None
+            result = list_files(self.loaded_index.repo_root, pattern=pattern)
+            return _truncate_observation(result)
+
+        return f"error=unknown tool: {tool_name}"
+
+    def _run_local_agent_loop(self, query: str, max_steps: int) -> tuple[str, list[AgentStep], str]:
+        steps: list[AgentStep] = []
+        final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+
+        for step_number in range(1, max_steps + 1):
+            final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+            response = self.react_planner.generate(query, steps, max_steps)
+            thought, tool_call, final_answer = _parse_react_response(response)
+
+            if tool_call is not None:
+                tool_name = str(tool_call.get("name", ""))
+                tool_arguments = tool_call.get("arguments", {})
+                if not isinstance(tool_arguments, dict):
+                    tool_arguments = {}
+                observation = self.execute_tool(tool_name, tool_arguments)
+                steps.append(
+                    AgentStep(
+                        step_number=step_number,
+                        thought=thought,
+                        action=_format_tool_action(tool_name, tool_arguments),
+                        observation=observation,
+                        tool_name=tool_name,
+                        tool_arguments=dict(tool_arguments),
+                        raw_response=response,
+                    )
+                )
+                continue
+
+            return final_answer or "The agent finished without a final answer.", steps, final_prompt
+
+        if steps:
+            fallback = self.react_planner._build_default_final(query, steps)
+        else:
+            fallback = f"I do not have enough grounded context to answer `{query}`."
+        return fallback, steps, final_prompt
+
+    def _run_llm_agent_loop(self, query: str, max_steps: int) -> tuple[str, list[AgentStep], str]:
+        if self.llm_synthesizer is None:
+            raise ValueError(
+                "LLM mode requested but no API key was configured. Set CODEBASE_COPILOT_LLM_API_KEY "
+                "or OPENAI_API_KEY."
+            )
+
+        steps: list[AgentStep] = []
+        final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+
+        for step_number in range(1, max_steps + 1):
+            final_prompt = build_react_prompt(query, _format_react_history(steps), max_steps=max_steps)
+            response = self.llm_synthesizer.generate(final_prompt)
+            thought, tool_call, final_answer = _parse_react_response(response)
+
+            if tool_call is not None:
+                tool_name = str(tool_call.get("name", ""))
+                tool_arguments = tool_call.get("arguments", {})
+                if not isinstance(tool_arguments, dict):
+                    tool_arguments = {}
+                observation = self.execute_tool(tool_name, tool_arguments)
+                steps.append(
+                    AgentStep(
+                        step_number=step_number,
+                        thought=thought,
+                        action=_format_tool_action(tool_name, tool_arguments),
+                        observation=observation,
+                        tool_name=tool_name,
+                        tool_arguments=dict(tool_arguments),
+                        raw_response=response,
+                    )
+                )
+                continue
+
+            return final_answer or "The agent finished without a final answer.", steps, final_prompt
+
+        fallback = "The agent reached the maximum number of steps without producing a final answer."
+        return fallback, steps, final_prompt
+
     def ask(self, query: str, top_k: int = 4, answer_mode: str = "auto") -> AnswerResult:
         self._ensure_answer_mode(answer_mode)
 
@@ -902,4 +1249,57 @@ class CodebaseQAAgent:
                 sources=sources,
                 backend="local",
                 notice=f"LLM request failed and the agent fell back to the local patch suggester: {exc}",
+            )
+
+    def agent_run(self, query: str, max_steps: int = 6, answer_mode: str = "auto") -> AgentRunResult:
+        self._ensure_answer_mode(answer_mode)
+        if max_steps <= 0:
+            raise ValueError("max_steps must be positive")
+
+        if answer_mode == "local":
+            answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            return AgentRunResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                steps=steps,
+                backend="local",
+            )
+
+        if self.llm_synthesizer is None:
+            if answer_mode == "llm":
+                raise ValueError(
+                    "LLM mode requested but no API key was configured. Set CODEBASE_COPILOT_LLM_API_KEY "
+                    "or OPENAI_API_KEY."
+                )
+            answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            return AgentRunResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                steps=steps,
+                backend="local",
+            )
+
+        try:
+            answer, steps, prompt = self._run_llm_agent_loop(query, max_steps=max_steps)
+            return AgentRunResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                steps=steps,
+                backend="llm",
+            )
+        except LLMRequestError as exc:
+            if answer_mode == "llm":
+                raise
+
+            answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            return AgentRunResult(
+                query=query,
+                answer=answer,
+                prompt=prompt,
+                steps=steps,
+                backend="local",
+                notice=f"LLM request failed and the agent fell back to the local ReAct planner: {exc}",
             )
