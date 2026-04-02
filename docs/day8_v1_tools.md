@@ -6,14 +6,14 @@ Create the minimal tool surface required for a ReAct-style code agent without di
 
 ## What This Version Contains
 
-- a new [python/codebase_copilot/tools.py](D:/Autumn Campus Recruitmen/Codebase Copilot/python/codebase_copilot/tools.py) module
+- a new `python/codebase_copilot/tools.py` module
 - three standalone tool functions:
   - `search_codebase(...)`
   - `read_file(...)`
   - `list_files(...)`
 - tool-level validation for empty queries, invalid paths, and unreadable files
 - a dedicated tool test:
-  - [tests/test_day8_tool_dispatch.py](D:/Autumn Campus Recruitmen/Codebase Copilot/tests/test_day8_tool_dispatch.py)
+  - `tests/test_day8_tool_dispatch.py`
 
 ## Design Notes
 

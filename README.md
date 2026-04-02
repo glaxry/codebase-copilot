@@ -65,6 +65,12 @@ python python/main.py ask "Where is the application entry point?" --index data/m
 python python/main.py patch "How should I add input validation to the login flow?" --index data/metadata.json --answer-mode local --top-k 4
 ```
 
+### Run the ReAct Agent
+
+```powershell
+python python/main.py agent "Where is the application entry point?" --index data/metadata.json --answer-mode local --max-steps 4
+```
+
 ### Run the Benchmark
 
 ```powershell
@@ -91,6 +97,7 @@ If your provider is not Alibaba Cloud DashScope, also set `CODEBASE_COPILOT_LLM_
 
 - sample queries: `docs/day7_sample_queries.md`
 - Windows demo script: `scripts/day7_showcase_commands.ps1`
+- agent demo queries: `docs/day8_agent_queries.md`
 - architecture diagram: `docs/codebase_copilot_architecture.html`
 - architecture explanation: `docs/codebase_copilot_architecture_explained.md`
 - flow diagram: `docs/codebase_copilot_flow.html`
@@ -145,6 +152,10 @@ python test_day6_benchmark_command.py
 python test_day7_showcase_flow.py
 python test_day7_cli_output.py
 python test_day7_docs_manifest.py
+python test_day8_tool_dispatch.py
+python test_day8_react_loop.py
+python test_day8_no_tool.py
+python test_day8_agent_command.py
 ```
 
 ## Version Notes
@@ -173,6 +184,9 @@ python test_day7_docs_manifest.py
 - `docs/day7_v1_showcase_flow.md`
 - `docs/day7_v2_cli_output_polish.md`
 - `docs/day7_v3_showcase_docs.md`
+- `docs/day8_v1_tools.md`
+- `docs/day8_v2_react_loop.md`
+- `docs/day8_v3_agent_command.md`
 
 ## Repository Notes
 

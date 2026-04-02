@@ -14,6 +14,7 @@ if str(PACKAGE_DIR) not in sys.path:
 from codebase_copilot.agent import CodebaseQAAgent
 from codebase_copilot.benchmark import build_benchmark_report, format_benchmark_table, run_benchmark_suite
 from codebase_copilot.cli_output import (
+    render_agent_output,
     render_answer_output,
     render_benchmark_output,
     render_chunk_output,
@@ -96,6 +97,31 @@ def _build_parser() -> argparse.ArgumentParser:
         "--show-prompt",
         action="store_true",
         help="Print the assembled patch prompt for debugging",
+    )
+
+    agent_parser = subparsers.add_parser("agent", help="Run the Day 8 ReAct agent loop against a metadata index")
+    agent_parser.add_argument("question", help="Question to investigate with tool use")
+    agent_parser.add_argument("--index", default="data/metadata.json", help="Path to metadata JSON")
+    agent_parser.add_argument("--max-steps", type=int, default=6, help="Maximum number of ReAct tool steps")
+    agent_parser.add_argument(
+        "--answer-mode",
+        choices=("auto", "local", "llm"),
+        default="auto",
+        help="Choose local fallback, force llm, or automatically use llm when configured",
+    )
+    agent_parser.add_argument("--llm-model", help="Override the model name for OpenAI-compatible backends")
+    agent_parser.add_argument("--llm-base-url", help="Override the OpenAI-compatible API base URL")
+    agent_parser.add_argument("--llm-timeout", type=float, help="Override the LLM request timeout in seconds")
+    agent_parser.add_argument(
+        "--preview-lines",
+        type=int,
+        default=8,
+        help="Maximum number of observation lines to print for each agent step",
+    )
+    agent_parser.add_argument(
+        "--show-prompt",
+        action="store_true",
+        help="Print the assembled ReAct prompt for debugging",
     )
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Run the Day 6 Python vs C++ retrieval benchmark")
@@ -206,6 +232,24 @@ def _run_patch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_agent(args: argparse.Namespace) -> int:
+    llm_settings = LLMSettings.from_env(
+        base_url=args.llm_base_url,
+        model=args.llm_model,
+        timeout_seconds=args.llm_timeout,
+    )
+    agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
+
+    try:
+        result = agent.agent_run(args.question, max_steps=args.max_steps, answer_mode=args.answer_mode)
+    except (LLMRequestError, ValueError) as exc:
+        print(f"error={exc}", file=sys.stderr)
+        return 2
+
+    print(render_agent_output(result, preview_lines=args.preview_lines, show_prompt=args.show_prompt))
+    return 0
+
+
 def _parse_benchmark_sizes(raw_sizes: str) -> list[int]:
     sizes: list[int] = []
     for part in raw_sizes.split(","):
@@ -273,6 +317,8 @@ def main() -> int:
         return _run_ask(args)
     if args.command == "patch":
         return _run_patch(args)
+    if args.command == "agent":
+        return _run_agent(args)
     if args.command == "benchmark":
         return _run_benchmark(args)
 
