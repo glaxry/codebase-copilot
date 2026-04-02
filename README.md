@@ -6,8 +6,11 @@ Codebase Copilot is a local code-repository agent built with Python and C++. Pyt
 
 - scans and chunks a local repository
 - builds a `metadata.json` index for retrieval
+- supports both hashing and semantic embedding providers
 - answers codebase questions with grounded source chunks
+- runs a ReAct-style agent loop with tool use and in-process memory
 - produces patch-style suggestions with file targets, reasons, and sketch diffs
+- supports a basic interactive `chat` loop
 - benchmarks Python brute-force retrieval against the C++ retriever
 
 ## Architecture
@@ -71,6 +74,18 @@ python python/main.py patch "How should I add input validation to the login flow
 python python/main.py agent "Where is the application entry point?" --index data/metadata.json --answer-mode local --max-steps 4
 ```
 
+### Build a Semantic Index
+
+```powershell
+python python/main.py index --repo . --output data/semantic_metadata.json --embedding-provider semantic --embedding-model all-MiniLM-L6-v2
+```
+
+### Start a Basic Chat Session
+
+```powershell
+python python/main.py chat --index data/metadata.json --mode agent --answer-mode local
+```
+
 ### Run the Benchmark
 
 ```powershell
@@ -98,6 +113,7 @@ If your provider is not Alibaba Cloud DashScope, also set `CODEBASE_COPILOT_LLM_
 - sample queries: `docs/day7_sample_queries.md`
 - Windows demo script: `scripts/day7_showcase_commands.ps1`
 - agent demo queries: `docs/day8_agent_queries.md`
+- embedding comparison report: `docs/embedding_comparison.md`
 - architecture diagram: `docs/codebase_copilot_architecture.html`
 - architecture explanation: `docs/codebase_copilot_architecture_explained.md`
 - flow diagram: `docs/codebase_copilot_flow.html`
@@ -128,6 +144,15 @@ Benchmark parameters used for the table below:
 | 50,000 | 648.134 | 3.697 | 175.31x | yes |
 | 100,000 | 1230.405 | 6.051 | 203.34x | yes |
 
+## Embedding Comparison
+
+Week 2 adds a semantic embedding option based on `sentence-transformers/all-MiniLM-L6-v2`.
+
+The current comparison report is saved to `docs/embedding_comparison.md`. On the synthetic five-query synonym benchmark, the generated report shows:
+
+- hashing top-1 hits: `2/5`
+- semantic top-1 hits: `5/5`
+
 ## Project Highlights
 
 - native retrieval core implemented in C++ instead of calling an external vector database
@@ -157,6 +182,10 @@ python test_day8_react_loop.py
 python test_day8_no_tool.py
 python test_day8_agent_command.py
 python test_day8_agent_tuning.py
+python test_day9_semantic_embedder.py
+python test_day9_memory_chat.py
+python test_day9_embedding_comparison.py
+python scripts/generate_embedding_comparison.py
 ```
 
 ## Version Notes
@@ -189,6 +218,9 @@ python test_day8_agent_tuning.py
 - `docs/day8_v2_react_loop.md`
 - `docs/day8_v3_agent_command.md`
 - `docs/day8_v4_agent_iteration_tuning.md`
+- `docs/day9_v1_semantic_embedder.md`
+- `docs/day9_v2_memory_chat.md`
+- `docs/day9_v3_embedding_comparison.md`
 
 ## Repository Notes
 
