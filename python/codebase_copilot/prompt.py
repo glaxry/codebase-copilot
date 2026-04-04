@@ -152,3 +152,27 @@ def build_react_best_effort_prompt(
         f"User Question:\n{query}\n\n"
         f"Scratchpad:\n{format_react_history(history_blocks)}\n"
     )
+
+
+def build_react_final_answer_prompt(
+    query: str,
+    history_blocks: list[str],
+    *,
+    conversation_blocks: list[str] | None = None,
+    draft_answer: str | None = None,
+) -> str:
+    conversation_blocks = conversation_blocks or []
+    draft_section = ""
+    if draft_answer is not None and draft_answer.strip():
+        draft_section = f"Draft Final Answer:\n{draft_answer.strip()}\n\n"
+    return (
+        "You are finishing a ReAct-style investigation and must now produce the final user-facing answer.\n"
+        "No more tool calls are allowed.\n"
+        "Use only the existing conversation history and scratchpad observations.\n"
+        "If a draft answer is provided, keep its meaning but improve clarity and grounding.\n"
+        "Do not include XML tags.\n\n"
+        f"Recent Conversation:\n{format_conversation_memory(conversation_blocks)}\n\n"
+        f"User Question:\n{query}\n\n"
+        f"{draft_section}"
+        f"Scratchpad:\n{format_react_history(history_blocks)}\n"
+    )

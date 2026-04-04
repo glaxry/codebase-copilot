@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from typing import Iterable, TextIO
 
 from .models import AgentRunResult, AgentStep, AnswerResult, PatchSuggestionResult, RetrievedChunk
 
@@ -146,7 +148,39 @@ def render_agent_step(step: AgentStep, preview_lines: int) -> list[str]:
     return lines
 
 
-def render_agent_output(result: AgentRunResult, preview_lines: int, show_prompt: bool) -> str:
+def stream_to_terminal(
+    chunks: Iterable[str],
+    *,
+    stream: TextIO | None = None,
+    prefix: str | None = None,
+    suffix: str = "\n",
+) -> str:
+    target = stream or sys.stdout
+    rendered: list[str] = []
+
+    if prefix:
+        target.write(prefix)
+        target.flush()
+
+    for chunk in chunks:
+        rendered.append(chunk)
+        target.write(chunk)
+        target.flush()
+
+    if suffix:
+        target.write(suffix)
+        target.flush()
+
+    return "".join(rendered)
+
+
+def render_agent_output(
+    result: AgentRunResult,
+    preview_lines: int,
+    show_prompt: bool,
+    *,
+    include_final_answer: bool = True,
+) -> str:
     lines = _header("AGENT RESULT")
     lines.append(f"question={result.query}")
     lines.append(f"backend={result.backend}")
@@ -159,8 +193,9 @@ def render_agent_output(result: AgentRunResult, preview_lines: int, show_prompt:
             lines.extend(render_agent_step(step, preview_lines))
     else:
         lines.append("No tool calls were needed.")
-    lines.append("[Final] Answer:")
-    lines.append(result.answer)
+    if include_final_answer:
+        lines.append("[Final] Answer:")
+        lines.append(result.answer)
     if show_prompt:
         lines.append("--- PROMPT ---")
         lines.append("prompt=")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from .embedder import create_embedder
 from .llm import LLMRequestError, LLMSettings, OpenAICompatibleChatSynthesizer
@@ -16,7 +16,13 @@ from .models import (
     PatchSuggestionResult,
     RetrievedChunk,
 )
-from .prompt import build_patch_prompt, build_qa_prompt, build_react_best_effort_prompt, build_react_prompt
+from .prompt import (
+    build_patch_prompt,
+    build_qa_prompt,
+    build_react_best_effort_prompt,
+    build_react_final_answer_prompt,
+    build_react_prompt,
+)
 from .retriever import VectorRetriever
 from .tools import (
     DEFAULT_READ_FILE_MAX_LINES,
@@ -126,6 +132,8 @@ SEARCH_RESULT_HEADER_PATTERN = re.compile(
     r"^\[(?P<path>.+?) lines (?P<start>\d+)-(?P<end>\d+)\]$",
     re.MULTILINE,
 )
+StepCallback = Callable[[AgentStep], None]
+StreamHandler = Callable[[Iterable[str]], str]
 
 
 def _extract_query_terms(text: str) -> list[str]:
@@ -1126,7 +1134,18 @@ class CodebaseQAAgent:
 
         return f"error=unknown tool: {tool_name}"
 
-    def _run_local_agent_loop(self, query: str, max_steps: int) -> tuple[str, list[AgentStep], str]:
+    @staticmethod
+    def _maybe_emit_step(step_callback: StepCallback | None, step: AgentStep) -> None:
+        if step_callback is not None:
+            step_callback(step)
+
+    def _run_local_agent_loop(
+        self,
+        query: str,
+        max_steps: int,
+        *,
+        step_callback: StepCallback | None = None,
+    ) -> tuple[str, list[AgentStep], str]:
         steps: list[AgentStep] = []
         conversation_blocks = self._conversation_blocks()
         final_prompt = build_react_prompt(
@@ -1163,6 +1182,7 @@ class CodebaseQAAgent:
                         raw_response=response,
                     )
                 )
+                self._maybe_emit_step(step_callback, steps[-1])
                 continue
 
             return final_answer or "The agent finished without a final answer.", steps, final_prompt
@@ -1175,7 +1195,14 @@ class CodebaseQAAgent:
         fallback = _best_effort_summary_from_steps(query, steps)
         return fallback, steps, summary_prompt
 
-    def _run_llm_agent_loop(self, query: str, max_steps: int) -> tuple[str, list[AgentStep], str]:
+    def _run_llm_agent_loop(
+        self,
+        query: str,
+        max_steps: int,
+        *,
+        step_callback: StepCallback | None = None,
+        stream_handler: StreamHandler | None = None,
+    ) -> tuple[str, list[AgentStep], str]:
         if self.llm_synthesizer is None:
             raise ValueError(
                 "LLM mode requested but no API key was configured. Set CODEBASE_COPILOT_LLM_API_KEY "
@@ -1218,7 +1245,23 @@ class CodebaseQAAgent:
                         raw_response=response,
                     )
                 )
+                self._maybe_emit_step(step_callback, steps[-1])
                 continue
+
+            if stream_handler is not None and final_answer:
+                streaming_prompt = build_react_final_answer_prompt(
+                    query,
+                    _format_react_history(steps),
+                    conversation_blocks=conversation_blocks,
+                    draft_answer=final_answer,
+                )
+                try:
+                    streamed_answer = stream_handler(self.llm_synthesizer.generate_stream(streaming_prompt))
+                except LLMRequestError:
+                    pass
+                else:
+                    if streamed_answer.strip():
+                        return streamed_answer, steps, streaming_prompt
 
             return final_answer or "The agent finished without a final answer.", steps, final_prompt
 
@@ -1227,6 +1270,14 @@ class CodebaseQAAgent:
             _format_react_history(steps),
             conversation_blocks=conversation_blocks,
         )
+        if stream_handler is not None:
+            try:
+                streamed_summary = stream_handler(self.llm_synthesizer.generate_stream(summary_prompt))
+            except LLMRequestError:
+                pass
+            else:
+                if streamed_summary.strip():
+                    return streamed_summary, steps, summary_prompt
         try:
             summary = self.llm_synthesizer.generate(summary_prompt)
         except LLMRequestError:
@@ -1341,13 +1392,25 @@ class CodebaseQAAgent:
                 notice=f"LLM request failed and the agent fell back to the local patch suggester: {exc}",
             )
 
-    def agent_run(self, query: str, max_steps: int = 6, answer_mode: str = "auto") -> AgentRunResult:
+    def agent_run(
+        self,
+        query: str,
+        max_steps: int = 6,
+        answer_mode: str = "auto",
+        *,
+        step_callback: StepCallback | None = None,
+        stream_handler: StreamHandler | None = None,
+    ) -> AgentRunResult:
         self._ensure_answer_mode(answer_mode)
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
 
         if answer_mode == "local":
-            answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            answer, steps, prompt = self._run_local_agent_loop(
+                query,
+                max_steps=max_steps,
+                step_callback=step_callback,
+            )
             self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
@@ -1363,7 +1426,11 @@ class CodebaseQAAgent:
                     "LLM mode requested but no API key was configured. Set CODEBASE_COPILOT_LLM_API_KEY "
                     "or OPENAI_API_KEY."
                 )
-            answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            answer, steps, prompt = self._run_local_agent_loop(
+                query,
+                max_steps=max_steps,
+                step_callback=step_callback,
+            )
             self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
@@ -1374,7 +1441,12 @@ class CodebaseQAAgent:
             )
 
         try:
-            answer, steps, prompt = self._run_llm_agent_loop(query, max_steps=max_steps)
+            answer, steps, prompt = self._run_llm_agent_loop(
+                query,
+                max_steps=max_steps,
+                step_callback=step_callback,
+                stream_handler=stream_handler,
+            )
             self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
@@ -1387,7 +1459,11 @@ class CodebaseQAAgent:
             if answer_mode == "llm":
                 raise
 
-            answer, steps, prompt = self._run_local_agent_loop(query, max_steps=max_steps)
+            answer, steps, prompt = self._run_local_agent_loop(
+                query,
+                max_steps=max_steps,
+                step_callback=step_callback,
+            )
             self._record_conversation_turn(query, answer)
             return AgentRunResult(
                 query=query,
