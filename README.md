@@ -10,7 +10,8 @@ Codebase Copilot is a local code-repository agent built with Python and C++. Pyt
 - answers codebase questions with grounded source chunks
 - runs a ReAct-style agent loop with tool use and in-process memory
 - produces patch-style suggestions with file targets, reasons, and sketch diffs
-- supports a basic interactive `chat` loop
+- supports a multi-mode interactive `chat` loop with history and mode switching
+- streams final LLM-backed agent answers in the terminal
 - benchmarks Python brute-force retrieval against the C++ retriever
 
 ## Architecture
@@ -74,16 +75,35 @@ python python/main.py patch "How should I add input validation to the login flow
 python python/main.py agent "Where is the application entry point?" --index data/metadata.json --answer-mode local --max-steps 4
 ```
 
+With LLM streaming enabled:
+
+```powershell
+python python/main.py agent "Where is the application entry point?" --index data/metadata.json --answer-mode llm --llm-model qwen3.5-122b-a10b --stream
+```
+
 ### Build a Semantic Index
 
 ```powershell
 python python/main.py index --repo . --output data/semantic_metadata.json --embedding-provider semantic --embedding-model all-MiniLM-L6-v2
 ```
 
-### Start a Basic Chat Session
+### Start an Interactive Chat Session
 
 ```powershell
 python python/main.py chat --index data/metadata.json --mode agent --answer-mode local
+```
+
+Inside chat:
+
+```text
+/help
+/history
+/mode ask
+/mode patch
+/mode agent
+/clear
+exit
+quit
 ```
 
 ### Run the Benchmark
@@ -114,6 +134,8 @@ If your provider is not Alibaba Cloud DashScope, also set `CODEBASE_COPILOT_LLM_
 - Windows demo script: `scripts/day7_showcase_commands.ps1`
 - agent demo queries: `docs/day8_agent_queries.md`
 - embedding comparison report: `docs/embedding_comparison.md`
+- Day 10 streaming notes: `docs/day10_v1_llm_streaming.md`
+- Day 10 chat notes: `docs/day10_v2_chat_command.md`
 - architecture diagram: `docs/codebase_copilot_architecture.html`
 - architecture explanation: `docs/codebase_copilot_architecture_explained.md`
 - flow diagram: `docs/codebase_copilot_flow.html`
@@ -185,6 +207,9 @@ python test_day8_agent_tuning.py
 python test_day9_semantic_embedder.py
 python test_day9_memory_chat.py
 python test_day9_embedding_comparison.py
+python test_day10_llm_streaming.py
+python test_day10_chat_command.py
+python test_day10_terminal_polish.py
 python scripts/generate_embedding_comparison.py
 ```
 
@@ -221,6 +246,9 @@ python scripts/generate_embedding_comparison.py
 - `docs/day9_v1_semantic_embedder.md`
 - `docs/day9_v2_memory_chat.md`
 - `docs/day9_v3_embedding_comparison.md`
+- `docs/day10_v1_llm_streaming.md`
+- `docs/day10_v2_chat_command.md`
+- `docs/day10_v3_terminal_polish.md`
 
 ## Repository Notes
 

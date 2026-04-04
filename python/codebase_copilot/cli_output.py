@@ -7,8 +7,33 @@ from typing import Iterable, TextIO
 from .models import AgentRunResult, AgentStep, AnswerResult, PatchSuggestionResult, RetrievedChunk
 
 
+BLUE = "\x1b[34m"
+GREEN = "\x1b[32m"
+YELLOW = "\x1b[33m"
+BOLD_WHITE = "\x1b[1;37m"
+RESET = "\x1b[0m"
+
+
 def _header(title: str) -> list[str]:
     return [f"=== {title} ==="]
+
+
+def supports_color(stream: TextIO | None = None) -> bool:
+    target = stream or sys.stdout
+    is_a_tty = getattr(target, "isatty", None)
+    if callable(is_a_tty):
+        return bool(is_a_tty())
+    return False
+
+
+def _style(text: str, color_code: str, use_color: bool) -> str:
+    if not use_color:
+        return text
+    return f"{color_code}{text}{RESET}"
+
+
+def format_final_label(use_color: bool) -> str:
+    return _style("[Final] Answer:", BOLD_WHITE, use_color)
 
 
 def _render_sources(sources: list[RetrievedChunk], preview_lines: int) -> list[str]:
@@ -137,12 +162,15 @@ def _truncate_lines(text: str, preview_lines: int) -> list[str]:
     return rendered
 
 
-def render_agent_step(step: AgentStep, preview_lines: int) -> list[str]:
-    lines = [f"[Step {step.step_number}] Thought: {step.thought}"]
+def render_agent_step(step: AgentStep, preview_lines: int, *, use_color: bool = False) -> list[str]:
+    thought_label = _style(f"[Step {step.step_number}] Thought:", BLUE, use_color)
+    lines = [f"{thought_label} {step.thought}"]
     if step.action is not None:
-        lines.append(f"[Step {step.step_number}] Action: {step.action}")
+        action_label = _style(f"[Step {step.step_number}] Action:", GREEN, use_color)
+        lines.append(f"{action_label} {step.action}")
     if step.observation is not None:
-        lines.append(f"[Step {step.step_number}] Observation:")
+        observation_label = _style(f"[Step {step.step_number}] Observation:", YELLOW, use_color)
+        lines.append(observation_label)
         for line in _truncate_lines(step.observation, preview_lines):
             lines.append(f"  {line}")
     return lines
@@ -180,6 +208,7 @@ def render_agent_output(
     show_prompt: bool,
     *,
     include_final_answer: bool = True,
+    use_color: bool = False,
 ) -> str:
     lines = _header("AGENT RESULT")
     lines.append(f"question={result.query}")
@@ -190,11 +219,11 @@ def render_agent_output(
     lines.append("--- REACT TRACE ---")
     if result.steps:
         for step in result.steps:
-            lines.extend(render_agent_step(step, preview_lines))
+            lines.extend(render_agent_step(step, preview_lines, use_color=use_color))
     else:
         lines.append("No tool calls were needed.")
     if include_final_answer:
-        lines.append("[Final] Answer:")
+        lines.append(format_final_label(use_color))
         lines.append(result.answer)
     if show_prompt:
         lines.append("--- PROMPT ---")

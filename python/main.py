@@ -14,6 +14,7 @@ if str(PACKAGE_DIR) not in sys.path:
 from codebase_copilot.agent import CodebaseQAAgent
 from codebase_copilot.benchmark import build_benchmark_report, format_benchmark_table, run_benchmark_suite
 from codebase_copilot.cli_output import (
+    format_final_label,
     render_agent_output,
     render_agent_step,
     render_answer_output,
@@ -23,6 +24,7 @@ from codebase_copilot.cli_output import (
     render_patch_output,
     render_scan_output,
     stream_to_terminal,
+    supports_color,
 )
 from codebase_copilot.config import (
     DEFAULT_CHUNK_OVERLAP,
@@ -292,7 +294,7 @@ def _run_patch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_agent_stream_hooks(preview_lines: int) -> tuple[dict[str, bool | int], object, object]:
+def _build_agent_stream_hooks(preview_lines: int, *, use_color: bool) -> tuple[dict[str, bool | int], object, object]:
     state: dict[str, bool | int] = {
         "trace_started": False,
         "steps_rendered": 0,
@@ -307,7 +309,7 @@ def _build_agent_stream_hooks(preview_lines: int) -> tuple[dict[str, bool | int]
 
     def _step_callback(step) -> None:
         _ensure_trace_header()
-        for line in render_agent_step(step, preview_lines):
+        for line in render_agent_step(step, preview_lines, use_color=use_color):
             print(line)
         state["steps_rendered"] = int(state["steps_rendered"]) + 1
 
@@ -316,7 +318,7 @@ def _build_agent_stream_hooks(preview_lines: int) -> tuple[dict[str, bool | int]
         if int(state["steps_rendered"]) == 0:
             print("No tool calls were needed.")
         state["streamed"] = True
-        return stream_to_terminal(chunks, prefix="[Final] Answer:\n")
+        return stream_to_terminal(chunks, prefix=f"{format_final_label(use_color)}\n")
 
     return state, _step_callback, _stream_handler
 
@@ -356,6 +358,7 @@ def _run_agent(args: argparse.Namespace) -> int:
         timeout_seconds=args.llm_timeout,
     )
     agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
+    use_color = supports_color()
     stream_state: dict[str, bool | int] | None = None
     step_callback = None
     stream_handler = None
@@ -363,7 +366,10 @@ def _run_agent(args: argparse.Namespace) -> int:
     if args.stream:
         print("=== AGENT RESULT ===")
         print(f"question={args.question}")
-        stream_state, step_callback, stream_handler = _build_agent_stream_hooks(args.preview_lines)
+        stream_state, step_callback, stream_handler = _build_agent_stream_hooks(
+            args.preview_lines,
+            use_color=use_color,
+        )
 
     try:
         result = agent.agent_run(
@@ -378,7 +384,14 @@ def _run_agent(args: argparse.Namespace) -> int:
         return 2
 
     if not args.stream:
-        print(render_agent_output(result, preview_lines=args.preview_lines, show_prompt=args.show_prompt))
+        print(
+            render_agent_output(
+                result,
+                preview_lines=args.preview_lines,
+                show_prompt=args.show_prompt,
+                use_color=use_color,
+            )
+        )
         return 0
 
     print(f"backend={result.backend}")
@@ -389,7 +402,7 @@ def _run_agent(args: argparse.Namespace) -> int:
         print("--- REACT TRACE ---")
         print("No tool calls were needed.")
     if not bool(stream_state["streamed"]):
-        print("[Final] Answer:")
+        print(format_final_label(use_color))
         print(result.answer)
     if args.show_prompt:
         print("--- PROMPT ---")
@@ -405,6 +418,7 @@ def _run_chat(args: argparse.Namespace) -> int:
         timeout_seconds=args.llm_timeout,
     )
     agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
+    use_color = supports_color()
     current_mode = args.mode
     session_history: list[tuple[str, str, str]] = []
 
@@ -449,7 +463,10 @@ def _run_chat(args: argparse.Namespace) -> int:
                 if args.stream:
                     print("=== AGENT RESULT ===")
                     print(f"question={message}")
-                    stream_state, step_callback, stream_handler = _build_agent_stream_hooks(args.preview_lines)
+                    stream_state, step_callback, stream_handler = _build_agent_stream_hooks(
+                        args.preview_lines,
+                        use_color=use_color,
+                    )
                     result = agent.agent_run(
                         message,
                         max_steps=args.max_steps,
@@ -465,12 +482,19 @@ def _run_chat(args: argparse.Namespace) -> int:
                         print("--- REACT TRACE ---")
                         print("No tool calls were needed.")
                     if not bool(stream_state["streamed"]):
-                        print("[Final] Answer:")
+                        print(format_final_label(use_color))
                         print(result.answer)
                     session_history.append(("agent", message, result.answer))
                 else:
                     result = agent.agent_run(message, max_steps=args.max_steps, answer_mode=args.answer_mode)
-                    print(render_agent_output(result, preview_lines=args.preview_lines, show_prompt=False))
+                    print(
+                        render_agent_output(
+                            result,
+                            preview_lines=args.preview_lines,
+                            show_prompt=False,
+                            use_color=use_color,
+                        )
+                    )
                     session_history.append(("agent", message, result.answer))
             elif current_mode == "ask":
                 result = agent.ask(message, top_k=args.top_k, answer_mode=args.answer_mode)
