@@ -321,6 +321,34 @@ def _build_agent_stream_hooks(preview_lines: int) -> tuple[dict[str, bool | int]
     return state, _step_callback, _stream_handler
 
 
+def _render_chat_help() -> str:
+    return "\n".join(
+        [
+            "Chat commands:",
+            "/help",
+            "/clear",
+            "/history",
+            "/mode agent|ask|patch",
+            "exit",
+            "quit",
+        ]
+    )
+
+
+def _render_chat_history(entries: list[tuple[str, str, str]]) -> str:
+    lines = ["--- HISTORY ---", f"history_count={len(entries)}"]
+    if not entries:
+        lines.append("No conversation history yet.")
+        return "\n".join(lines)
+
+    for index, (mode, user_message, assistant_message) in enumerate(entries, start=1):
+        lines.append(f"[{index}] mode={mode}")
+        lines.append(f"user={user_message}")
+        lines.append("assistant=")
+        lines.extend(assistant_message.splitlines())
+    return "\n".join(lines)
+
+
 def _run_agent(args: argparse.Namespace) -> int:
     llm_settings = LLMSettings.from_env(
         base_url=args.llm_base_url,
@@ -377,11 +405,13 @@ def _run_chat(args: argparse.Namespace) -> int:
         timeout_seconds=args.llm_timeout,
     )
     agent = CodebaseQAAgent.from_metadata(args.index, llm_settings=llm_settings)
+    current_mode = args.mode
+    session_history: list[tuple[str, str, str]] = []
 
-    print("Chat session started. Type /clear to reset agent memory, or exit/quit to leave.")
+    print("Chat session started. Type /help for commands, /clear to reset history, or exit/quit to leave.")
     while True:
         try:
-            message = input("chat> ").strip()
+            message = input(f"chat[{current_mode}]> ").strip()
         except KeyboardInterrupt:
             print("\nchat closed.")
             return 0
@@ -394,14 +424,31 @@ def _run_chat(args: argparse.Namespace) -> int:
         if message in {"exit", "quit"}:
             print("chat closed.")
             return 0
+        if message == "/help":
+            print(_render_chat_help())
+            continue
         if message == "/clear":
             agent.clear_history()
+            session_history.clear()
             print("history cleared.")
+            continue
+        if message == "/history":
+            print(_render_chat_history(session_history))
+            continue
+        if message.startswith("/mode"):
+            parts = message.split()
+            if len(parts) != 2 or parts[1] not in {"agent", "ask", "patch"}:
+                print("error=usage: /mode agent|ask|patch")
+                continue
+            current_mode = parts[1]
+            print(f"mode switched to {current_mode}.")
             continue
 
         try:
-            if args.mode == "agent":
+            if current_mode == "agent":
                 if args.stream:
+                    print("=== AGENT RESULT ===")
+                    print(f"question={message}")
                     stream_state, step_callback, stream_handler = _build_agent_stream_hooks(args.preview_lines)
                     result = agent.agent_run(
                         message,
@@ -420,18 +467,21 @@ def _run_chat(args: argparse.Namespace) -> int:
                     if not bool(stream_state["streamed"]):
                         print("[Final] Answer:")
                         print(result.answer)
+                    session_history.append(("agent", message, result.answer))
                 else:
                     result = agent.agent_run(message, max_steps=args.max_steps, answer_mode=args.answer_mode)
                     print(render_agent_output(result, preview_lines=args.preview_lines, show_prompt=False))
-            elif args.mode == "ask":
+                    session_history.append(("agent", message, result.answer))
+            elif current_mode == "ask":
                 result = agent.ask(message, top_k=args.top_k, answer_mode=args.answer_mode)
                 print(render_answer_output(result, preview_lines=args.preview_lines, show_prompt=False))
+                session_history.append(("ask", message, result.answer))
             else:
                 result = agent.patch(message, top_k=args.top_k, answer_mode=args.answer_mode)
                 print(render_patch_output(result, preview_lines=args.preview_lines, show_prompt=False))
+                session_history.append(("patch", message, result.suggestion))
         except (LLMRequestError, ValueError) as exc:
-            print(f"error={exc}", file=sys.stderr)
-            return 2
+            print(f"error={exc}")
 
 
 def _parse_benchmark_sizes(raw_sizes: str) -> list[int]:
